@@ -1,6 +1,10 @@
 use fmrs_core::{
     piece::{Color, Kind, KINDS, NUM_HAND_KIND},
-    position::{position::PositionAux, Square, UndoMove},
+    position::{
+        bitboard::rule::{king_power, reachable_sub},
+        position::PositionAux,
+        Square, UndoMove,
+    },
 };
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +25,52 @@ pub(super) struct SearchConstraints {
     pub(super) max_file: Option<u8>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) max_rank: Option<u8>,
+    /// 受方玉が居てよい最小の段 (1=1一段目)。`Some(4)` なら玉は 1〜3段目
+    /// (攻方の成可能エリア) に入れない。煙詰では「壁で玉を成可能エリアから
+    /// 締め出す」構造が長手数の逆算を支えるため、それを直接制約として課す。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) white_king_min_rank: Option<u8>,
+    /// `white_king_min_rank` を課し始める step。詰み際 (step 小) では煙詰らしく
+    /// 壁が壊れて玉が上段へ入るので、そこには課さない。
+    #[serde(default, skip_serializing_if = "is_zero_u16")]
+    pub(super) white_king_min_rank_after_step: u16,
+    /// この step 以上では、攻方 (黒) が成可能エリア (1〜3段目) に触れる手
+    /// (発地・着地が1〜3段目、または成る手) を禁止する。
+    ///
+    /// 根拠: 成ると金相当以上の強い駒になり、余詰が出やすくなって一意性が壊れる。
+    /// 実測でも、伸びる系列は攻方が全区間で1〜3段目に触らず成りもしない
+    /// (本研究の33枚/27枚は攻方の成り0回、1〜3段目へ動くのは最後の3手のみ。
+    /// 狼煙も詰みから27手以内でしか触らない)。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) black_avoid_promotion_zone_from_step: Option<u16>,
+    /// 「壁」の要求: 3段目(9マス)のうち、**壁として有資格な攻方駒**
+    /// (利きが1〜3段目に完全に収まり、玉の居る4〜9段に手が出せない駒) の利きで
+    /// 守られているマス数の下限。詳細は `rank3_clean_seal_count`。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) rank3_seal_min: Option<u8>,
+    /// `rank3_seal_min` を課し始める step。詰み際は壁が壊れるので課さない。
+    #[serde(default, skip_serializing_if = "is_zero_u16")]
+    pub(super) rank3_seal_from_step: u16,
+    /// 壁を要求し始める盤上駒数。これ未満では壁を要求しない (逆算の途中で
+    /// 自然に組み上がる余地を残す)。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) rank3_seal_from_pieces: Option<u32>,
+    /// 駒数がこの分だけ増えるごとに、要求する壁の枚数を1増やす。
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub(super) rank3_seal_piece_step: u32,
+    /// 逆算の中盤で受方玉に残すべき「逃げ道」の最小数。
+    ///
+    /// 実測: 伸びる系列は中盤 (step 61) で逃げ道5・玉の2近傍の駒3 だったのに対し、
+    /// 中盤で駒を詰め込んだ系列 (逃げ道1・2近傍11) は step 79→83 で frontier が
+    /// 236,112→738 と壊滅した。玉の自由度は「まだ伸ばせるか」の最も強い指標。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) king_min_liberties: Option<u8>,
+    /// `king_min_liberties` を課す step の下限 (詰み際は玉が詰むので課さない)。
+    #[serde(default, skip_serializing_if = "is_zero_u16")]
+    pub(super) king_min_liberties_from_step: u16,
+    /// 同上限 (初形付近は最後に足した駒で玉が窮屈になるのが自然なので課さない)。
+    #[serde(default, skip_serializing_if = "is_zero_u16")]
+    pub(super) king_min_liberties_to_step: u16,
     #[serde(default)]
     pub(super) allow_white_pieces: bool,
     #[serde(default)]
@@ -263,6 +313,15 @@ pub(super) fn satisfies_ideal_smoke_generation_constraints(
     if !satisfies_pawn_pct(position, step, constraints) {
         return false;
     }
+    if !satisfies_white_king_min_rank(position, step, constraints) {
+        return false;
+    }
+    if !satisfies_rank3_seal(position, step, constraints) {
+        return false;
+    }
+    if !satisfies_king_min_liberties(position, step, constraints) {
+        return false;
+    }
     if constraints.natural_piece_limit && !satisfies_natural_piece_limit(position) {
         return false;
     }
@@ -331,6 +390,9 @@ pub(super) fn satisfies_ideal_smoke_undo_candidate(
     if !satisfies_promoted_pct(position, next_step, constraints) {
         return false;
     }
+    if !satisfies_black_promotion_zone(position, undo_move, next_step, constraints) {
+        return false;
+    }
     constraints.allow_white_pieces || black_hand_empty_after_undo(position, undo_move)
 }
 
@@ -396,10 +458,19 @@ pub(super) fn validate_search_constraints(constraints: SearchConstraints) -> any
             bail!("min-pawn-pct must be between 0 and 100");
         }
     }
+    if let Some(r) = constraints.white_king_min_rank {
+        if !(1..=9).contains(&r) {
+            bail!("white-king-min-rank must be between 1 and 9");
+        }
+    }
     Ok(())
 }
 
 fn is_zero_u128(v: &u128) -> bool {
+    *v == 0
+}
+
+fn is_zero_u16(v: &u16) -> bool {
     *v == 0
 }
 
@@ -570,6 +641,240 @@ pub(super) fn satisfies_promoted_pct(
 
 pub(super) fn pawn_in_play_count(position: &PositionAux) -> u32 {
     board_pawn_count(position) + position.hands().count(Color::BLACK, Kind::Pawn) as u32
+}
+
+/// 「壁」判定（質を問う版）: 3段目の9マスのうち、**壁として有資格な攻方駒**の
+/// 利きで守られているマス数。
+///
+/// 有資格 (locked-in) = その駒の利きが 1〜3段目に完全に収まっていること。
+/// 言い換えると、玉の居る領域 (4〜9段) に一切手が出せない駒。
+///
+/// なぜ質を問うか: 3段目を守っている駒が同時に4段目にも利いていたら、それは壁ではなく
+/// 攻撃駒であり、王手の選択肢を増やして余詰を作る側に回る。作者の例で言えば
+///   - 3二の金: 利きは1段目3マス・2段目2マス・3三 のみ → 4段目に届かない → 有資格
+///   - 3三の金: 利きに 3四 が入る → 玉を直接攻撃できる → 失格
+///   - 3三の歩: 利きは3二だけ → 有資格。これを3二の金が守れば玉は取れず踏み込めない
+///
+/// 素朴に「3段目に利きがある/駒が居る」を数えると質を取り違える (実測: 33枚で
+/// 頭打ちの系列は素朴には 7/9 に見えるが、質で測ると 2/9 しかない)。
+pub(super) fn rank3_clean_seal_count(position: &PositionAux) -> u8 {
+    let Some(king) = position
+        .bitboard(Color::WHITE, Kind::King)
+        .into_iter()
+        .next()
+    else {
+        return 0;
+    };
+    let black = position.black_bb();
+    let mut cover = [false; 9];
+    // 3段目のマスに「玉の領域を攻撃できる駒」が乗っていたら、そのマスは壁として
+    // 数えない (マス自体は守られていても、そこに居る駒が能動的な攻撃駒なら
+    // 王手の選択肢を増やして余詰を作る側になる)。
+    let mut occupied_by_unqualified = [false; 9];
+    for &kind in KINDS.iter() {
+        let mut bb = position.bitboard(Color::BLACK, kind);
+        while let Some(sq) = bb.next() {
+            let reach: Vec<Square> = reachable_sub(position, Color::BLACK, sq, kind)
+                .into_iter()
+                .collect();
+            // (1) いま玉の領域 (4〜9段 = row >= 3) に手が出る駒は壁ではない。
+            if reach.iter().any(|r| r.row() >= 3) {
+                if sq.row() == 2 {
+                    occupied_by_unqualified[sq.col()] = true;
+                }
+                continue;
+            }
+            // (2) 1手先: 動ける先から玉の領域に手が出るなら壁ではない。
+            //     自駒の居るマスへは動けないので、そこは見ない
+            //     (例: 3二の金は3三が空なら3三へ動けて3四に利く → 失格。
+            //      3三に歩が居れば動けないので合格)。
+            let escapes_hit = reach.iter().filter(|d| !black.contains(**d)).any(|&d| {
+                let mut kinds = vec![kind];
+                if let Some(promoted) = kind.promote() {
+                    kinds.push(promoted);
+                }
+                kinds.iter().any(|&k| {
+                    reachable_sub(position, Color::BLACK, d, k)
+                        .into_iter()
+                        .any(|r| r.row() >= 3)
+                })
+            });
+            if escapes_hit {
+                if sq.row() == 2 {
+                    occupied_by_unqualified[sq.col()] = true;
+                }
+                continue;
+            }
+            for r in reach {
+                if r.row() == 2 {
+                    cover[r.col()] = true;
+                }
+            }
+        }
+    }
+    // 白 (受方) の駒が乗っている3段目のマスも壁とは見なさない。受方は自由に動かせる。
+    for sq in Square::iter() {
+        if sq.row() == 2 {
+            if let Some((color, _)) = position.get(sq) {
+                if color == Color::WHITE {
+                    occupied_by_unqualified[sq.col()] = true;
+                }
+            }
+        }
+    }
+    // 壁が要るのは玉が到達しうる筋の周辺だけ (玉の筋 ±2)。
+    let kc = king.col() as isize;
+    (0..9)
+        .filter(|c| (*c as isize - kc).abs() <= 2 && cover[*c] && !occupied_by_unqualified[*c])
+        .count() as u8
+}
+
+/// 受方玉の「逃げ道」の数 = 玉の8近傍のうち、自駒が居らず攻方の利きも無いマス。
+pub(super) fn king_liberties(position: &PositionAux) -> u8 {
+    let Some(king) = position
+        .bitboard(Color::WHITE, Kind::King)
+        .into_iter()
+        .next()
+    else {
+        return 0;
+    };
+    let neighbors = king_power(king);
+    let white = position.white_bb();
+    let mut free: Vec<Square> = neighbors
+        .into_iter()
+        .filter(|sq| !white.contains(*sq))
+        .collect();
+    if free.is_empty() {
+        return 0;
+    }
+    for &kind in KINDS.iter() {
+        let mut bb = position.bitboard(Color::BLACK, kind);
+        while let Some(sq) = bb.next() {
+            let reach = reachable_sub(position, Color::BLACK, sq, kind);
+            free.retain(|d| !reach.contains(*d));
+            if free.is_empty() {
+                return 0;
+            }
+        }
+    }
+    free.len() as u8
+}
+
+/// 中盤で玉に十分な逃げ道が残っているか。
+pub(super) fn satisfies_king_min_liberties(
+    position: &PositionAux,
+    step: u16,
+    constraints: SearchConstraints,
+) -> bool {
+    let Some(min) = constraints.king_min_liberties else {
+        return true;
+    };
+    if step < constraints.king_min_liberties_from_step {
+        return true;
+    }
+    if constraints.king_min_liberties_to_step != 0 && step > constraints.king_min_liberties_to_step
+    {
+        return true;
+    }
+    king_liberties(position) >= min
+}
+
+/// 壁の要求枚数。壁は3枚の詰みからの逆算の途中で**自然に組み上がる**必要があるので、
+/// 一定枚数を最初から要求すると浅い段階で全滅する。そこで飛角・香桂の段階許可と
+/// 同じ idiom で、**盤上駒数に応じて要求を段階的に上げる**。
+///
+/// 駒数 < start なら 0、start 以上で `(駒数 - start)/step + 1`、`min` で頭打ち。
+/// 目安: 狼煙で攻方玉が押さえていたのは 2三/3三/4三 の3マスなので min=3 が目標。
+fn required_wall(pieces: u32, constraints: SearchConstraints) -> u8 {
+    let (Some(min), Some(start)) = (
+        constraints.rank3_seal_min,
+        constraints.rank3_seal_from_pieces,
+    ) else {
+        return 0;
+    };
+    if pieces < start {
+        return 0;
+    }
+    let step = constraints.rank3_seal_piece_step.max(1);
+    let want = (pieces - start) / step + 1;
+    (want as u8).min(min)
+}
+
+/// 壁の要求を満たすか。詰み際 (step < from_step) では課さない。
+pub(super) fn satisfies_rank3_seal(
+    position: &PositionAux,
+    step: u16,
+    constraints: SearchConstraints,
+) -> bool {
+    if constraints.rank3_seal_min.is_none() {
+        return true;
+    }
+    if step < constraints.rank3_seal_from_step {
+        return true;
+    }
+    let want = required_wall(pieces_in_play(position), constraints);
+    if want == 0 {
+        return true;
+    }
+    rank3_clean_seal_count(position) >= want
+}
+
+/// 攻方 (黒) の着手が成可能エリア (1〜3段目) に触れていないか。
+///
+/// `undo_move` は `position` に至った手を巻き戻すものなので、その手を指したのは
+/// `position.turn().opposite()`。黒の手だけを対象にする。
+/// `next_step` が閾値未満 (＝詰みに近い) なら課さない: 煙詰では終盤に壁が壊れて
+/// 攻方が成可能エリアへ踏み込むのが自然だから。
+pub(super) fn satisfies_black_promotion_zone(
+    position: &PositionAux,
+    undo_move: &UndoMove,
+    next_step: u16,
+    constraints: SearchConstraints,
+) -> bool {
+    let Some(from_step) = constraints.black_avoid_promotion_zone_from_step else {
+        return true;
+    };
+    if next_step < from_step {
+        return true;
+    }
+    if position.turn() != Color::WHITE {
+        // 直前に指したのは白なので対象外。
+        return true;
+    }
+    // row は 0 起点で上から数える (row 0 = 1段目)。1〜3段目 = row < 3。
+    let in_zone = |sq: &Square| sq.row() < 3;
+    match undo_move {
+        UndoMove::UnDrop(sq, _) => !in_zone(sq),
+        UndoMove::UnMove {
+            source,
+            dest,
+            promote,
+            ..
+        } => !(*promote || in_zone(source) || in_zone(dest)),
+    }
+}
+
+/// 受方玉が攻方の成可能エリア (1〜N-1段目) に入っていないか。
+///
+/// 煙詰では「壁で玉を成可能エリアから締め出す」構造が長手数の逆算を支える一方、
+/// **詰み際にはその壁が壊れて玉が上段へ入る**（煙詰なので当然そうなる）。
+/// よって `after_step` 未満の step、すなわち詰みに近い局面ではこの制約を課さない。
+pub(super) fn satisfies_white_king_min_rank(
+    position: &PositionAux,
+    step: u16,
+    constraints: SearchConstraints,
+) -> bool {
+    let Some(min_rank) = constraints.white_king_min_rank else {
+        return true;
+    };
+    if step < constraints.white_king_min_rank_after_step {
+        return true;
+    }
+    // row は 0 起点で上から数える (row 0 = 1段目) ので、段 = row + 1。
+    !position
+        .bitboard(Color::WHITE, Kind::King)
+        .into_iter()
+        .any(|sq| (sq.row() + 1) < min_rank as usize)
 }
 
 pub(super) fn satisfies_pawn_pct(
@@ -1065,6 +1370,186 @@ mod tests {
 
         assert!(satisfies_search_constraints(&inside, constraints));
         assert!(!satisfies_search_constraints(&outside, constraints));
+    }
+
+    #[test]
+    fn white_king_min_rank_keeps_king_out_of_promotion_zone() {
+        // white_king_min_rank=4 -> 玉は 1〜3段目 (row 0..2) に入れない。
+        // ただし詰み際 (step < after_step) では課さない = 煙詰らしく壁が壊れる。
+        let constraints = SearchConstraints {
+            white_king_min_rank: Some(4),
+            white_king_min_rank_after_step: 10,
+            ..Default::default()
+        };
+        let mut inside = PositionAux::default();
+        inside.set(Square::S14, Color::WHITE, Kind::King);
+        let mut outside = PositionAux::default();
+        outside.set(Square::S13, Color::WHITE, Kind::King);
+
+        assert!(satisfies_white_king_min_rank(&inside, 20, constraints));
+        assert!(!satisfies_white_king_min_rank(&outside, 20, constraints));
+        // 詰みに近い step では課されない。
+        assert!(satisfies_white_king_min_rank(&outside, 9, constraints));
+        // 制約自体が未設定なら常に true。
+        assert!(satisfies_white_king_min_rank(
+            &outside,
+            20,
+            SearchConstraints::default()
+        ));
+    }
+
+    #[test]
+    fn black_avoid_promotion_zone_rejects_moves_touching_ranks_1_to_3() {
+        let constraints = SearchConstraints {
+            black_avoid_promotion_zone_from_step: Some(6),
+            ..Default::default()
+        };
+        // 直前に指したのが黒 = 現局面の手番は白。
+        let mut black_moved = PositionAux::default();
+        black_moved.set_turn(Color::WHITE);
+        // 4段目 -> 5段目 の平手。成可能エリアに触れないので通る。
+        let safe = UndoMove::UnMove {
+            source: Square::S54,
+            dest: Square::S55,
+            promote: false,
+            capture: None,
+            pawn_drop: false,
+        };
+        // 着地が3段目。
+        let into_zone = UndoMove::UnMove {
+            source: Square::S54,
+            dest: Square::S53,
+            promote: false,
+            capture: None,
+            pawn_drop: false,
+        };
+        // 成る手 (発着とも4段目以下でも、成れるのは成可能エリア絡みのみ)。
+        let promoting = UndoMove::UnMove {
+            source: Square::S53,
+            dest: Square::S54,
+            promote: true,
+            capture: None,
+            pawn_drop: false,
+        };
+        let drop_in_zone = UndoMove::UnDrop(Square::S52, false);
+
+        assert!(satisfies_black_promotion_zone(
+            &black_moved,
+            &safe,
+            20,
+            constraints
+        ));
+        assert!(!satisfies_black_promotion_zone(
+            &black_moved,
+            &into_zone,
+            20,
+            constraints
+        ));
+        assert!(!satisfies_black_promotion_zone(
+            &black_moved,
+            &promoting,
+            20,
+            constraints
+        ));
+        assert!(!satisfies_black_promotion_zone(
+            &black_moved,
+            &drop_in_zone,
+            20,
+            constraints
+        ));
+        // 詰み際 (step < 閾値) では課さない。
+        assert!(satisfies_black_promotion_zone(
+            &black_moved,
+            &into_zone,
+            5,
+            constraints
+        ));
+        // 白が指した手は対象外。
+        let mut white_moved = PositionAux::default();
+        white_moved.set_turn(Color::BLACK);
+        assert!(satisfies_black_promotion_zone(
+            &white_moved,
+            &into_zone,
+            20,
+            constraints
+        ));
+        // 制約未設定なら常に true。
+        assert!(satisfies_black_promotion_zone(
+            &black_moved,
+            &into_zone,
+            20,
+            SearchConstraints::default()
+        ));
+    }
+
+    #[test]
+    fn rank3_seal_requires_pieces_that_cannot_touch_the_king_zone() {
+        // 3四に玉、3二に攻方の金だけ。金は3三へ動けて、そこから3四に利くので
+        // 壁ではない (作者の指摘そのもの)。
+        let mut p = PositionAux::default();
+        p.set(Square::S34, Color::WHITE, Kind::King);
+        p.set(Square::S32, Color::BLACK, Kind::Gold);
+        assert_eq!(rank3_clean_seal_count(&p), 0);
+
+        // 3三に歩を置くと金は3三へ動けなくなり、3三を守る壁になる。
+        p.set(Square::S33, Color::BLACK, Kind::Pawn);
+        assert_eq!(rank3_clean_seal_count(&p), 1);
+
+        // 守られていても、そのマスに居る駒が玉の領域を攻撃できるなら壁ではない。
+        // 1四の歩は1三の飛に塞がれて動けず1三を守るが、その1三の飛は4段目に利く。
+        let mut q = PositionAux::default();
+        q.set(Square::S19, Color::WHITE, Kind::King);
+        q.set(Square::S14, Color::BLACK, Kind::Pawn);
+        q.set(Square::S13, Color::BLACK, Kind::Rook);
+        assert_eq!(rank3_clean_seal_count(&q), 0);
+
+        // 壁は逆算の途中で組み上がるものなので、要求は駒数に応じて上がる。
+        let c = SearchConstraints {
+            rank3_seal_min: Some(3),
+            rank3_seal_from_step: 10,
+            rank3_seal_from_pieces: Some(20),
+            rank3_seal_piece_step: 8,
+            ..Default::default()
+        };
+        assert_eq!(required_wall(19, c), 0); // 駒が少ないうちは要求しない
+        assert_eq!(required_wall(20, c), 1);
+        assert_eq!(required_wall(28, c), 2);
+        assert_eq!(required_wall(36, c), 3);
+        assert_eq!(required_wall(44, c), 3); // min で頭打ち
+
+        // 詰み際 (step < from_step) では課さない。
+        assert!(satisfies_rank3_seal(&p, 9, c));
+        // 制約未設定なら常に true。
+        assert!(satisfies_rank3_seal(&p, 40, SearchConstraints::default()));
+    }
+
+    #[test]
+    fn king_min_liberties_measures_escape_squares() {
+        // 5五の玉。攻方が居なければ逃げ道は8。
+        let mut p = PositionAux::default();
+        p.set(Square::S55, Color::WHITE, Kind::King);
+        assert_eq!(king_liberties(&p), 8);
+        // 5四に攻方の金を置くと、その金の利き (5三,4三,6三,4四,6四,5五) のうち
+        // 玉の近傍 4四,6四 と 5四 自身(金が居るが守られていない=取れる) が影響する。
+        p.set(Square::S54, Color::BLACK, Kind::Gold);
+        let after = king_liberties(&p);
+        assert!(after < 8, "金を置いたら逃げ道は減るはず (got {after})");
+
+        let c = SearchConstraints {
+            king_min_liberties: Some(3),
+            king_min_liberties_from_step: 20,
+            king_min_liberties_to_step: 65,
+            ..Default::default()
+        };
+        // 範囲外の step では課さない。
+        assert!(satisfies_king_min_liberties(&p, 10, c));
+        assert!(satisfies_king_min_liberties(&p, 80, c));
+        // 未設定なら常に true。
+        assert!(satisfies_king_min_liberties(
+            &p,
+            40,
+            SearchConstraints::default()
+        ));
     }
 
     #[test]

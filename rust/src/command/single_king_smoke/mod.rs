@@ -97,6 +97,52 @@ pub enum SingleKingSmokeCommand {
         max_file: Option<u8>,
         #[arg(long)]
         max_rank: Option<u8>,
+        /// 受方玉が居てよい最小の段 (1=一段目)。`--white-king-min-rank 4` なら
+        /// 玉は 1〜3段目 (攻方の成可能エリア) に一度も入れない。煙詰では
+        /// 「壁で玉を成可能エリアから締め出す」構造が長手数の逆算を支えるので、
+        /// それを直接制約として課して探索空間を絞る。
+        #[arg(long)]
+        white_king_min_rank: Option<u8>,
+        /// `--white-king-min-rank` を課し始める step (詰みからの手数)。
+        /// 煙詰では詰み際に壁が壊れて玉が上段へ入るのが自然なので、既定 10 では
+        /// 詰みから9手以内の局面には課さない。
+        #[arg(long, default_value_t = 10)]
+        white_king_min_rank_after_step: u16,
+        /// この step 以上で、攻方(黒)が成可能エリア(1〜3段目)に触れる手
+        /// (発地・着地が1〜3段目、または成る手) を禁止する。
+        /// 成ると強い駒になり余詰が出やすいので、逆算の深部でそれを断つ。
+        /// 実測では伸びる系列ほど攻方は1〜3段目に触れない
+        /// (33枚/27枚は攻方の成り0回・最後の3手のみ、狼煙も詰みから27手以内のみ)。
+        #[arg(long)]
+        black_avoid_promotion_zone_from_step: Option<u16>,
+        /// 「壁」の要求: 3段目(9マス)のうち攻方が塞いでいる — 駒が居る、または
+        /// 攻方の利きがある — マス数の下限。玉はそこへ踏み込めないので、
+        /// 3段目が塞がっているほど成可能エリアが封鎖され、成りによる余詰が減る。
+        /// 実測: 狼煙は初形付近で 9/9、深部でも 7〜8/9。33枚で頭打ちの単玉系列は
+        /// 深部で 3/9 しかなかった。
+        #[arg(long)]
+        rank3_seal_min: Option<u8>,
+        /// `--rank3-seal-min` を課し始める step。詰み際は壁が壊れるので課さない。
+        #[arg(long, default_value_t = 10)]
+        rank3_seal_from_step: u16,
+        /// 壁を要求し始める盤上駒数。壁は逆算の途中で自然に組み上がる必要があるので、
+        /// 駒が少ない浅い段階では要求しない。
+        #[arg(long)]
+        rank3_seal_from_pieces: Option<u32>,
+        /// 駒数がこの分だけ増えるごとに要求する壁を1マス増やす (上限 --rank3-seal-min)。
+        #[arg(long, default_value_t = 8)]
+        rank3_seal_piece_step: u32,
+        /// 逆算の中盤で受方玉に残すべき逃げ道 (玉の8近傍のうち自駒が無く攻方の
+        /// 利きも無いマス) の最小数。実測では、中盤で玉を締めすぎた系列は深部で
+        /// frontier が壊滅する。伸びる系列は中盤で逃げ道5・玉の2近傍3枚だった。
+        #[arg(long)]
+        king_min_liberties: Option<u8>,
+        /// `--king-min-liberties` を課す step の下限 (詰み際には課さない)。
+        #[arg(long, default_value_t = 20)]
+        king_min_liberties_from_step: u16,
+        /// 同上限 (初形付近は玉が窮屈になるのが自然なので課さない)。0 で上限なし。
+        #[arg(long, default_value_t = 65)]
+        king_min_liberties_to_step: u16,
         #[arg(long, default_value_t = false)]
         allow_white_pieces: bool,
         /// Max % of promoted pieces on the board (0–100), enforced at
@@ -351,6 +397,16 @@ pub fn single_king_smoke(cmd: SingleKingSmokeCommand) -> anyhow::Result<()> {
             quad_pieces,
             max_file,
             max_rank,
+            white_king_min_rank,
+            white_king_min_rank_after_step,
+            black_avoid_promotion_zone_from_step,
+            rank3_seal_min,
+            rank3_seal_from_step,
+            rank3_seal_from_pieces,
+            rank3_seal_piece_step,
+            king_min_liberties,
+            king_min_liberties_from_step,
+            king_min_liberties_to_step,
             allow_white_pieces,
             max_promoted_pct,
             max_promoted_pct_after_step,
@@ -437,6 +493,38 @@ pub fn single_king_smoke(cmd: SingleKingSmokeCommand) -> anyhow::Result<()> {
                     quad_pieces,
                     max_file,
                     max_rank,
+                    white_king_min_rank,
+                    // 制約未使用時は 0 に正規化して serde でスキップさせ、
+                    // 既存 run の condition_key / checkpoint を変えない。
+                    white_king_min_rank_after_step: if white_king_min_rank.is_some() {
+                        white_king_min_rank_after_step
+                    } else {
+                        0
+                    },
+                    black_avoid_promotion_zone_from_step,
+                    rank3_seal_min,
+                    rank3_seal_from_step: if rank3_seal_min.is_some() {
+                        rank3_seal_from_step
+                    } else {
+                        0
+                    },
+                    rank3_seal_from_pieces,
+                    rank3_seal_piece_step: if rank3_seal_from_pieces.is_some() {
+                        rank3_seal_piece_step
+                    } else {
+                        0
+                    },
+                    king_min_liberties,
+                    king_min_liberties_from_step: if king_min_liberties.is_some() {
+                        king_min_liberties_from_step
+                    } else {
+                        0
+                    },
+                    king_min_liberties_to_step: if king_min_liberties.is_some() {
+                        king_min_liberties_to_step
+                    } else {
+                        0
+                    },
                     allow_white_pieces,
                     slack,
                     max_promoted_pct,
