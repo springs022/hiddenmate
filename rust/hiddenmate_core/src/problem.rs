@@ -147,7 +147,9 @@ fn build_world(mut position: PositionAux, variables: Vec<VariablePiece>) -> Opti
     if black_checked && white_checked {
         return None;
     }
-    if position.turn().is_black() && (black_checked || white_checked) {
+    // 初形で王手されていてはならないのは「手番でない側」の玉だけ。
+    // 攻方手番では、攻方玉への王手を外しながら王手する着手も合法になり得る。
+    if position.turn().is_black() && white_checked {
         return None;
     }
     if position.turn().is_white() && black_checked {

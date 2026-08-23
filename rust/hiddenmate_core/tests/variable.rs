@@ -67,6 +67,49 @@ fn checking_obligation_resolves_rook_to_promoted_rook() {
 }
 
 #[test]
+fn allows_initial_check_against_attacker_king() {
+    // 攻方手番では、攻方玉に王手が掛かっている初形も合法。
+    let state = VariableProblem {
+        base_sfen: "8k/7g1/8K/9/9/9/9/9/9 b - 1".to_string(),
+        variables: vec![],
+    }
+    .enumerate()
+    .unwrap();
+
+    assert_eq!(state.world_count(), 1);
+}
+
+#[test]
+fn resolved_variable_is_ordinary_before_its_next_move() {
+    let state = VariableProblem {
+        base_sfen: "9/9/kS7/N8/1L7/9/9/9/9 b - 1".to_string(),
+        variables: vec![VariableSpec {
+            id: VariableId(1),
+            color: Color::BLACK,
+            location: VariableLocation::Board(square(6, 4)),
+            candidates: vec![Kind::ProRook],
+        }],
+    }
+    .enumerate()
+    .unwrap();
+
+    assert_eq!(state.resolved_kind(VariableId(1)), Some(Kind::ProRook));
+    let solutions = solve_exact(&state, 1, 10);
+    assert_eq!(solutions.len(), 1);
+    assert!(matches!(
+        solutions[0][0],
+        ObservedMove::Move {
+            identity: MoveIdentity::Known,
+            ..
+        }
+    ));
+    assert_eq!(
+        format_solution_japanese(&state, &solutions[0]),
+        vec!["84龍(64)"]
+    );
+}
+
+#[test]
 fn solves_one_ply_variable_helpmate() {
     // 83銀が82・92を塞ぎ、85香が84の龍を守る。94桂は余分な
     // 64V-94を防ぐため、64V-84だけで93玉が詰む。
@@ -97,6 +140,9 @@ fn solves_one_ply_variable_helpmate() {
         final_state.resolved_kind(VariableId(1)),
         Some(Kind::ProRook)
     );
+
+    // 1手解があるため、同じ初形を3手協力詰としては扱わない。
+    assert!(solve_exact(&state, 3, 10).is_empty());
 }
 
 #[test]
@@ -186,4 +232,22 @@ fn pawn_drop_mate_world_is_removed_from_a_variable_drop() {
         .map(|solution| format_solution_japanese(&state, solution).join(" "))
         .collect::<Vec<_>>();
     assert_eq!(formatted, vec!["82▲打", "92▲打", "94▲打"]);
+}
+
+#[test]
+fn defender_pawn_block_is_not_filtered_as_pawn_drop_mate() {
+    // 55飛の王手に35歩合。55飛は59飛にピンされているため35歩を取れず、
+    // 攻方に次の王手がなくても、受方の35歩合自体は合法である。
+    let state = VariableProblem {
+        base_sfen: "4K4/9/9/9/4R3k/9/9/9/4r4 w - 1".to_string(),
+        variables: vec![],
+    }
+    .enumerate()
+    .unwrap();
+    let pawn_block = ObservedMove::Drop {
+        identity: DropIdentity::Known(Kind::Pawn),
+        destination: square(3, 5),
+    };
+
+    assert!(state.observed_moves().contains(&pawn_block));
 }

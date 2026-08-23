@@ -56,6 +56,10 @@ impl ConcreteWorld {
         self.variables.values()
     }
 
+    pub(crate) fn forget_variable(&mut self, id: VariableId) {
+        self.variables.remove(&id);
+    }
+
     pub(crate) fn observed_variants(&self, movement: &Movement) -> Vec<ObservedMove> {
         match *movement {
             Movement::Move {
