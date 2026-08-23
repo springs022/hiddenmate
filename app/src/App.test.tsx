@@ -8,5 +8,7 @@ test("renders HiddenMate title", () => {
   expect(
     screen.getByRole("heading", { name: "覆面駒（Variable）検討" })
   ).not.toBeNull();
+  expect(screen.getByRole("button", { name: "盤面・フォーム" })).not.toBeNull();
+  expect(screen.getByLabelText("通常駒のbase SFEN")).not.toBeNull();
   expect(screen.getByRole("button", { name: "覆面駒を検討" })).not.toBeNull();
 });

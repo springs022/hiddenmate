@@ -21,3 +21,74 @@ code {
 .variable-result-table {
   max-width: 32rem;
 }
+
+.variable-plies {
+  max-width: 8rem;
+}
+
+.variable-board-wrap {
+  width: fit-content;
+  border: 3px solid #495057;
+}
+
+.variable-board-coordinate-shell {
+  width: fit-content;
+}
+
+.variable-file-labels {
+  display: grid;
+  grid-template-columns: repeat(9, 32px);
+  padding-left: 3px;
+  text-align: center;
+  font-size: 0.8rem;
+}
+
+.variable-rank-labels {
+  display: grid;
+  grid-template-rows: repeat(9, 36px);
+  padding-top: 3px;
+  font-size: 0.8rem;
+}
+
+.variable-rank-labels span {
+  display: flex;
+  align-items: center;
+  padding-left: 0.3rem;
+}
+
+.variable-piece {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 0.65em;
+  font-weight: 700;
+  color: #fff;
+}
+
+.variable-owner-mark {
+  position: absolute;
+  top: 0;
+  left: 1px;
+  font-size: 0.55em;
+}
+
+.variable-piece-black {
+  background: #0d6efd;
+}
+
+.variable-piece-white {
+  background: #6f42c1;
+}
+
+.variable-piece-selected {
+  box-shadow: inset 0 0 0 3px #ffc107;
+}
+
+.variable-candidate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 0.45rem 0.75rem;
+}

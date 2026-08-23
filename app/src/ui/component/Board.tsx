@@ -1,3 +1,4 @@
+import { ReactNode } from "react";
 import { SELECTED_COLOR } from "../constants";
 import * as model from "../../model";
 
@@ -6,6 +7,8 @@ export default function Board(props: {
   selected: [number, number] | undefined;
   onClick: (pos: [number, number]) => void;
   onRightClick: (pos: [number, number]) => void;
+  overlay?: (pos: [number, number]) => ReactNode;
+  squareLabel?: (pos: [number, number]) => string;
 }) {
   const board = [];
   for (let row = 0; row < 9; row++) {
@@ -17,6 +20,8 @@ export default function Board(props: {
           onRightClick={() => props.onRightClick([row, col])}
           onClick={() => props.onClick([row, col])}
           piece={props.pieces[row][col]}
+          overlay={props.overlay?.([row, col])}
+          label={props.squareLabel?.([row, col])}
           selected={
             !!props.selected &&
             row === props.selected[0] &&
@@ -36,12 +41,15 @@ export default function Board(props: {
 
 function Square(props: {
   piece: model.Piece | undefined;
+  overlay?: ReactNode;
+  label?: string;
   selected: boolean;
   onClick: () => void;
   onRightClick: () => void;
 }) {
   return (
     <td
+      aria-label={props.label}
       onClick={(_e) => props.onClick()}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -58,7 +66,7 @@ function Square(props: {
         verticalAlign: "middle",
       }}
     >
-      {props.piece ? pieceString(props.piece) : ""}
+      {props.overlay ?? (props.piece ? pieceString(props.piece) : "")}
     </td>
   );
 }

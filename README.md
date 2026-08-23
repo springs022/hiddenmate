@@ -18,8 +18,9 @@
 - 指定手数の協力手順列挙
 - JSON問題形式とCLI
 - WebAssembly経由のWeb検討（JSON入力、候補世界・解答表示）
+- Web盤面での覆面駒配置、所属・候補駒種・手数のフォーム入力
 
-Web版は [HiddenMate](https://springs022.github.io/hiddenmate/) で試せます。入力済みのサンプル問題は「覆面駒を検討」ボタンだけで実行できます。Web盤面上での覆面駒の直接配置と透明駒は今後実装します。
+Web版は [HiddenMate](https://springs022.github.io/hiddenmate/) で試せます。入力済みのサンプル問題は「覆面駒を検討」ボタンだけで実行できます。通常駒はbase SFEN、覆面駒は盤面クリックと候補チェックボックスで編集できます。透明駒は今後実装します。
 
 ## CLI
 
