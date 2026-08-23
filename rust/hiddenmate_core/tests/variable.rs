@@ -3,7 +3,7 @@ use fmrs_core::{
     position::Square,
 };
 use hiddenmate_core::{
-    format_solution_japanese, solve_exact, MoveIdentity, ObservedMove, VariableId,
+    format_solution_japanese, solve_exact, DropIdentity, MoveIdentity, ObservedMove, VariableId,
     VariableLocation, VariableProblem, VariableSpec,
 };
 
@@ -149,4 +149,41 @@ fn enumerates_variable_in_hand_and_can_observe_its_drop() {
             ..
         }
     )));
+}
+
+#[test]
+fn pawn_drop_mate_world_is_removed_from_a_variable_drop() {
+    // 94への覆面駒打ちは、歩なら打歩詰めで不合法だが、香・銀・金・飛なら合法な詰み。
+    // 観測した94▲打から歩の世界だけを除外し、解として成立させる。
+    let state = VariableProblem {
+        base_sfen: "9/9/kS7/9/1L7/9/9/9/9 b - 1".to_string(),
+        variables: vec![VariableSpec {
+            id: VariableId(1),
+            color: Color::BLACK,
+            location: VariableLocation::Hand(Color::BLACK),
+            candidates: fmrs_core::piece::KINDS.to_vec(),
+        }],
+    }
+    .enumerate()
+    .unwrap();
+    let drop_94 = ObservedMove::Drop {
+        identity: DropIdentity::Variable(VariableId(1)),
+        destination: square(9, 4),
+    };
+
+    let next = state.apply(drop_94).unwrap();
+    assert_eq!(
+        next.candidates(VariableId(1)),
+        [Kind::Lance, Kind::Silver, Kind::Gold, Kind::Rook]
+            .into_iter()
+            .collect()
+    );
+    assert!(next.is_proven_mate());
+
+    let solutions = solve_exact(&state, 1, 10);
+    let formatted = solutions
+        .iter()
+        .map(|solution| format_solution_japanese(&state, solution).join(" "))
+        .collect::<Vec<_>>();
+    assert_eq!(formatted, vec!["82▲打", "92▲打", "94▲打"]);
 }

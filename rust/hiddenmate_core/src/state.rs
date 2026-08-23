@@ -112,6 +112,7 @@ fn concrete_moves(world: &ConcreteWorld) -> Vec<(ObservedMove, Movement)> {
 
     movements
         .into_iter()
+        .filter(|movement| !is_illegal_pawn_drop_mate(world, movement))
         .flat_map(|movement| {
             world
                 .observed_variants(&movement)
@@ -119,4 +120,20 @@ fn concrete_moves(world: &ConcreteWorld) -> Vec<(ObservedMove, Movement)> {
                 .map(move |observed| (observed, movement))
         })
         .collect()
+}
+
+/// 黒の王手生成では打歩詰めも一旦候補に含まれるため、着手として公開する前に除く。
+/// 覆面駒では、この除外によって「歩なら不合法」という候補世界だけが消える。
+fn is_illegal_pawn_drop_mate(world: &ConcreteWorld, movement: &Movement) -> bool {
+    if !movement.is_pawn_drop() {
+        return false;
+    }
+
+    let mut position = world.position().clone();
+    position.do_move(movement);
+    let mut replies = Vec::new();
+    matches!(
+        advance_aux(&mut position, &AdvanceOptions::default(), &mut replies),
+        Ok(false)
+    ) && replies.is_empty()
 }
