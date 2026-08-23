@@ -57,6 +57,8 @@ interface VariableSolveResponse {
 }
 
 const initialBaseSfen = "9/9/kS7/N8/1L7/9/9/9/9 b - 1";
+const singleKingBaseSfen = "4k4/9/9/9/9/9/9/9/9 b - 1";
+const doubleKingBaseSfen = "4k4/9/9/9/9/9/9/9/4K4 b - 1";
 const initialVariables: VariableDraft[] = [
   {
     id: 1,
@@ -237,6 +239,16 @@ export function VariableSolver() {
     }
   };
 
+  const resetBoard = (sfen: string) => {
+    dispatch({
+      ty: "set-position",
+      position: editablePositionFromBaseSfen(sfen),
+    });
+    setVariables([]);
+    setSelectedId(0);
+    clearResult();
+  };
+
   const loadJsonIntoForm = () => {
     try {
       const value: unknown = JSON.parse(manualProblem);
@@ -314,8 +326,30 @@ export function VariableSolver() {
                   </Button>
                 </div>
               </Form.Group>
+              <div className="mb-3">
+                <div className="small fw-bold mb-1">盤面をリセット</div>
+                <ButtonGroup aria-label="盤面をリセット">
+                  <Button
+                    size="sm"
+                    variant="outline-secondary"
+                    onClick={() => resetBoard(singleKingBaseSfen)}
+                  >
+                    単玉のみ
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline-secondary"
+                    onClick={() => resetBoard(doubleKingBaseSfen)}
+                  >
+                    双玉のみ
+                  </Button>
+                </ButtonGroup>
+                <Form.Text className="d-block">
+                  通常駒と覆面駒を初期化します。
+                </Form.Text>
+              </div>
               <Form.Text className="d-block mb-3">
-                通常駒は盤面・駒台をクリックして移動できます。右クリックで成・所属を切り替えます。
+                通常駒は盤面・駒台をクリックして移動できます。覆面駒は右の一覧で選び、盤面の空きマスまたは駒台をクリックして移動します。
               </Form.Text>
               <VariablePositionEditor
                 position={editorState.position}
@@ -325,31 +359,16 @@ export function VariableSolver() {
                 clickBoard={clickBoard}
                 rightClickBoard={rightClickBoard}
                 clickKnownHand={clickKnownHand}
+                moveSelectedToHand={moveSelectedToHand}
               />
             </Col>
             <Col xl={5}>
-              <Form.Group
-                className="mb-3 variable-plies"
-                controlId="variable-plies"
-              >
-                <Form.Label>手数</Form.Label>
-                <Form.Control
-                  type="number"
-                  min={1}
-                  value={plies}
-                  onChange={(event) =>
-                    setPlies(Math.max(1, Number(event.target.value) || 1))
-                  }
-                />
-              </Form.Group>
-              <VariableSettings
+              <VariableControls
                 variables={variables}
                 selected={selected}
                 setSelectedId={setSelectedId}
-                updateSelected={updateSelected}
                 removeVariable={removeVariable}
                 addVariableToHand={addVariableToHand}
-                moveSelectedToHand={moveSelectedToHand}
               />
             </Col>
           </Row>
@@ -375,6 +394,20 @@ export function VariableSolver() {
         )}
 
         <div className="d-flex align-items-end gap-3 my-3">
+          {inputMode === "form" && (
+            <Form.Group className="variable-plies" controlId="variable-plies">
+              <Form.Label>手数</Form.Label>
+              <Form.Control
+                type="number"
+                min={1}
+                value={plies}
+                onChange={(event) =>
+                  setPlies(Math.max(1, Number(event.target.value) || 1))
+                }
+                disabled={solving}
+              />
+            </Form.Group>
+          )}
           <Form.Group controlId="variable-max-solutions">
             <Form.Label>最大解数</Form.Label>
             <Form.Control
@@ -411,6 +444,7 @@ function VariablePositionEditor(props: {
     color: Color,
     kind: Parameters<typeof Hands>[0]["selected"],
   ) => void;
+  moveSelectedToHand: (color: Color) => void;
 }) {
   const boardSelected =
     props.selected?.location.type === "board"
@@ -424,6 +458,16 @@ function VariablePositionEditor(props: {
     props.normalSelected.color === color
       ? (props.normalSelected.kind ?? "")
       : undefined;
+  const clickHand = (
+    color: Color,
+    kind: Parameters<typeof Hands>[0]["selected"],
+  ) => {
+    if (props.selected && kind === undefined) {
+      props.moveSelectedToHand(color);
+      return;
+    }
+    props.clickKnownHand(color, kind);
+  };
 
   return (
     <div className="variable-position-editor">
@@ -432,7 +476,9 @@ function VariablePositionEditor(props: {
         hands={props.position.hands.white}
         selectedKind={selectedHand("white")}
         variables={props.variables}
-        onKnownClick={(kind) => props.clickKnownHand("white", kind)}
+        onKnownClick={(kind) => clickHand("white", kind)}
+        onVariableDestination={() => props.moveSelectedToHand("white")}
+        variableSelected={props.selected !== undefined}
       />
       <CoordinateBoard
         position={props.position}
@@ -447,7 +493,9 @@ function VariablePositionEditor(props: {
         hands={props.position.hands.black}
         selectedKind={selectedHand("black")}
         variables={props.variables}
-        onKnownClick={(kind) => props.clickKnownHand("black", kind)}
+        onKnownClick={(kind) => clickHand("black", kind)}
+        onVariableDestination={() => props.moveSelectedToHand("black")}
+        variableSelected={props.selected !== undefined}
       />
     </div>
   );
@@ -459,6 +507,8 @@ function VariableHand(props: {
   selectedKind: Parameters<typeof Hands>[0]["selected"];
   variables: VariableDraft[];
   onKnownClick: Parameters<typeof Hands>[0]["onClick"];
+  onVariableDestination: () => void;
+  variableSelected: boolean;
 }) {
   const symbol = props.color === "black" ? "▲" : "△";
   const label = props.color === "black" ? "攻方駒台" : "受方駒台（自動補完）";
@@ -467,7 +517,15 @@ function VariableHand(props: {
       variable.color === props.color && variable.location.type === "hand",
   );
   return (
-    <div className={`variable-hand variable-hand-${props.color}`}>
+    <div
+      className={`variable-hand variable-hand-${props.color}${
+        props.variableSelected ? " variable-hand-drop-target" : ""
+      }`}
+      onClick={props.onVariableDestination}
+      title={
+        props.variableSelected ? `選択中の覆面駒を${label}へ移動` : undefined
+      }
+    >
       <div className="small fw-bold mb-1">{label}</div>
       <Hands
         hands={props.hands}
@@ -555,18 +613,16 @@ function CoordinateBoard(props: {
   );
 }
 
-function VariableSettings(props: {
+function VariableControls(props: {
   variables: VariableDraft[];
   selected?: VariableDraft;
   setSelectedId: (id: number) => void;
-  updateSelected: (change: Partial<VariableDraft>) => void;
   removeVariable: (id: number) => void;
   addVariableToHand: (color: Color) => void;
-  moveSelectedToHand: (color: Color) => void;
 }) {
   return (
     <div className="variable-control-panel border rounded p-3">
-      <h3 className="h6">覆面駒の追加・設定</h3>
+      <h3 className="h6">覆面駒の新規追加</h3>
       <p className="small text-muted mb-2">
         追加時は攻方または受方の駒台に置かれます。
       </p>
@@ -584,84 +640,43 @@ function VariableSettings(props: {
           ＋ 受方駒台に覆面駒を追加（△）
         </Button>
       </div>
-      <div className="small fw-bold mb-2">覆面駒一覧</div>
-      <div className="d-flex flex-wrap gap-2 mb-3">
-        {props.variables.map((variable) => (
-          <Button
-            key={variable.id}
-            size="sm"
-            variant={
-              props.selected?.id === variable.id ? "primary" : "outline-primary"
-            }
-            onClick={() => props.setSelectedId(variable.id)}
-          >
-            V{variable.id} {locationLabel(variable.location)}
-          </Button>
-        ))}
-      </div>
-      {props.selected ? (
-        <div className="variable-settings border rounded p-3">
-          <div className="d-flex justify-content-between align-items-center mb-3">
-            <h3 className="h6 mb-0">
-              V{props.selected.id}の設定（
-              {locationLabel(props.selected.location)}）
-            </h3>
-            <Button
-              size="sm"
-              variant="outline-danger"
-              onClick={() => props.removeVariable(props.selected!.id)}
-            >
-              削除
-            </Button>
-          </div>
-          <fieldset>
-            <legend className="form-label fs-6">配置</legend>
-            <div className="d-grid gap-2 mb-3">
-              <Button
-                size="sm"
-                variant="outline-primary"
-                onClick={() => props.moveSelectedToHand("black")}
-              >
-                攻方駒台へ移動（▲）
-              </Button>
-              <Button
-                size="sm"
-                variant="outline-secondary"
-                onClick={() => props.moveSelectedToHand("white")}
-              >
-                受方駒台へ移動（△）
-              </Button>
-            </div>
-            <p className="small text-muted">
-              盤上へ置く場合は、選択したまま盤面の空きマスをクリックします。
-            </p>
-          </fieldset>
-          <fieldset>
-            <legend className="form-label fs-6">所属</legend>
-            <Form.Check
-              inline
-              type="radio"
-              name={`variable-color-${props.selected.id}`}
-              label="攻方（▲）"
-              checked={props.selected.color === "black"}
-              onChange={() => props.updateSelected({ color: "black" })}
-            />
-            <Form.Check
-              inline
-              type="radio"
-              name={`variable-color-${props.selected.id}`}
-              label="受方（△）"
-              checked={props.selected.color === "white"}
-              onChange={() => props.updateSelected({ color: "white" })}
-            />
-          </fieldset>
-          <p className="small text-muted mt-3 mb-0">
-            候補駒種は常に全14駒種です。駒台では合法な7駒種へ自動的に絞られます。
-          </p>
+      <h3 className="h6">覆面駒一覧</h3>
+      <p className="small text-muted mb-2">
+        選択後、移動先の盤面または駒台をクリックします。
+      </p>
+      {props.variables.length > 0 ? (
+        <div className="d-flex flex-wrap gap-2">
+          {props.variables.map((variable) => {
+            const symbol = variable.color === "black" ? "▲" : "△";
+            return (
+              <ButtonGroup key={variable.id}>
+                <Button
+                  size="sm"
+                  variant={
+                    props.selected?.id === variable.id
+                      ? "primary"
+                      : "outline-primary"
+                  }
+                  onClick={() => props.setSelectedId(variable.id)}
+                >
+                  {symbol}V{variable.id} {locationLabel(variable.location)}
+                </Button>
+                <Button
+                  aria-label={`V${variable.id}を削除`}
+                  title={`V${variable.id}を削除`}
+                  size="sm"
+                  variant="outline-danger"
+                  onClick={() => props.removeVariable(variable.id)}
+                >
+                  ×
+                </Button>
+              </ButtonGroup>
+            );
+          })}
         </div>
       ) : (
         <Alert variant="info" className="mb-0">
-          上のボタンから覆面駒を追加してください。
+          覆面駒はまだありません。
         </Alert>
       )}
     </div>
