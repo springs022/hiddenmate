@@ -8,7 +8,7 @@ test("renders HiddenMate title", () => {
   render(<App />);
   expect(screen.getByRole("heading", { name: "HiddenMate" })).not.toBeNull();
   expect(
-    screen.getByRole("heading", { name: "覆面駒（Variable）検討" }),
+    screen.getByRole("heading", { name: "覆面駒入りの協力詰" }),
   ).not.toBeNull();
   expect(screen.getByRole("button", { name: "盤面・フォーム" })).not.toBeNull();
   expect(screen.getByLabelText("通常駒のbase SFEN")).not.toBeNull();
@@ -33,19 +33,26 @@ test("renders HiddenMate title", () => {
     screen.queryByText(/通常駒は盤面・駒台をクリックして移動できます/),
   ).toBeNull();
   expect(screen.getByRole("button", { name: "覆面駒を検討" })).not.toBeNull();
-  expect(screen.getByRole("heading", { name: "Saved positions" })).not.toBeNull();
+  expect(
+    screen.getByRole("heading", { name: "Saved positions" }),
+  ).not.toBeNull();
   expect(screen.queryByRole("heading", { name: "通常協力詰" })).toBeNull();
 });
 
-test("places variable solve controls below the variable control panel", () => {
+test("places the editor, variable controls, and solve results in three columns", () => {
   const { container } = render(<App />);
   const panel = container.querySelector(".variable-control-panel");
   const solveControls = container.querySelector(".variable-solve-controls");
+  const columns = container.querySelectorAll(
+    ".variable-three-column-layout > .col-xl-4",
+  );
 
   expect(panel).not.toBeNull();
   expect(solveControls).not.toBeNull();
   expect(panel!.contains(solveControls)).toBe(false);
-  expect(panel!.nextElementSibling?.contains(solveControls)).toBe(true);
+  expect(columns).toHaveLength(3);
+  expect(columns[1].contains(panel)).toBe(true);
+  expect(columns[2].contains(solveControls)).toBe(true);
 });
 
 test("moves a selected standard piece by clicking the hand background", () => {
@@ -59,9 +66,9 @@ test("moves a selected standard piece by clicking the hand background", () => {
   fireEvent.click(attackHand!);
 
   expect(silverSquare.textContent).not.toContain("銀");
-  expect(container.querySelector(".variable-hand-black")?.textContent).toContain(
-    "銀1",
-  );
+  expect(
+    container.querySelector(".variable-hand-black")?.textContent,
+  ).toContain("銀1");
 });
 
 test("saves the current variable position with a name", () => {

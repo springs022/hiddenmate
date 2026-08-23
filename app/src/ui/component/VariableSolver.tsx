@@ -111,7 +111,11 @@ function buildProblemJson(
   plies: number,
   variables: VariableDraft[],
 ): string {
-  return JSON.stringify(buildProblemDocument(baseSfen, plies, variables), null, 2);
+  return JSON.stringify(
+    buildProblemDocument(baseSfen, plies, variables),
+    null,
+    2,
+  );
 }
 
 function buildProblemDocument(
@@ -173,8 +177,7 @@ function validSavedVariableProblems(value: unknown): SavedVariableProblem[] {
     }
     const candidate = entry as Record<string, unknown>;
     return (
-      typeof candidate.name === "string" &&
-      isProblemDocument(candidate.problem)
+      typeof candidate.name === "string" && isProblemDocument(candidate.problem)
     );
   });
 }
@@ -391,7 +394,7 @@ export function VariableSolver() {
   return (
     <Card className="mb-4">
       <Card.Header as="h2" className="h5 mb-0">
-        覆面駒（Variable）検討
+        覆面駒入りの協力詰
       </Card.Header>
       <Card.Body>
         <ButtonGroup className="mb-3" aria-label="問題入力方法">
@@ -410,56 +413,58 @@ export function VariableSolver() {
         </ButtonGroup>
 
         {inputMode === "form" ? (
-          <Row className="g-4">
-            <Col xl={7}>
-              <Form.Group className="mb-2" controlId="variable-base-sfen">
-                <Form.Label>通常駒のbase SFEN</Form.Label>
-                <div className="d-flex gap-2">
-                  <Form.Control
-                    className="variable-sfen-input"
-                    size="sm"
-                    value={sfenInput}
-                    onChange={(event) => setSfenInput(event.target.value)}
-                    spellCheck={false}
-                  />
-                  <Button
-                    className="text-nowrap"
-                    size="sm"
-                    variant="outline-secondary"
-                    onClick={loadSfen}
-                  >
-                    読込
-                  </Button>
-                </div>
-              </Form.Group>
-              <VariablePositionEditor
-                position={editorState.position}
-                normalSelected={editorState.selected}
-                variables={variables}
-                selected={selected}
-                clickBoard={clickBoard}
-                rightClickBoard={rightClickBoard}
-                clickKnownHand={clickKnownHand}
-                moveSelectedToHand={moveSelectedToHand}
-              />
-            </Col>
-            <Col xl={5}>
-              <VariableSavedPositions
-                positions={savedPositions}
-                defaultName={baseSfen}
-                disabled={solving}
-                onSave={saveCurrentPosition}
-                onLoad={(position) => applyProblemToForm(position.problem)}
-                onDelete={deleteSavedPosition}
-              />
-              <VariableControls
-                variables={variables}
-                selected={selected}
-                setSelectedId={setSelectedId}
-                removeVariable={removeVariable}
-                addVariableToHand={addVariableToHand}
-              />
-              <div className="mt-3">
+          <>
+            <Form.Group className="mb-3" controlId="variable-base-sfen">
+              <Form.Label>通常駒のbase SFEN</Form.Label>
+              <div className="d-flex gap-2">
+                <Form.Control
+                  className="variable-sfen-input"
+                  size="sm"
+                  value={sfenInput}
+                  onChange={(event) => setSfenInput(event.target.value)}
+                  spellCheck={false}
+                />
+                <Button
+                  className="text-nowrap"
+                  size="sm"
+                  variant="outline-secondary"
+                  onClick={loadSfen}
+                >
+                  読込
+                </Button>
+              </div>
+            </Form.Group>
+            <Row className="g-4 variable-three-column-layout">
+              <Col xl={4}>
+                <VariablePositionEditor
+                  position={editorState.position}
+                  normalSelected={editorState.selected}
+                  variables={variables}
+                  selected={selected}
+                  clickBoard={clickBoard}
+                  rightClickBoard={rightClickBoard}
+                  clickKnownHand={clickKnownHand}
+                  moveSelectedToHand={moveSelectedToHand}
+                />
+              </Col>
+              <Col xl={4}>
+                <VariableSavedPositions
+                  positions={savedPositions}
+                  defaultName={baseSfen}
+                  disabled={solving}
+                  onSave={saveCurrentPosition}
+                  onLoad={(position) => applyProblemToForm(position.problem)}
+                  onDelete={deleteSavedPosition}
+                />
+                <VariableControls
+                  variables={variables}
+                  selected={selected}
+                  setSelectedId={setSelectedId}
+                  removeVariable={removeVariable}
+                  addVariableToHand={addVariableToHand}
+                />
+              </Col>
+              <Col xl={4}>
                 <VariableSolveControls
                   plies={plies}
                   setPlies={setPlies}
@@ -470,9 +475,9 @@ export function VariableSolver() {
                 />
                 {error && <Alert variant="danger">{error}</Alert>}
                 {response && <VariableResult response={response} />}
-              </div>
-            </Col>
-          </Row>
+              </Col>
+            </Row>
+          </>
         ) : (
           <div>
             <Form.Group className="mb-2" controlId="variable-problem-json">
@@ -927,14 +932,17 @@ function VariableResult(props: { response: VariableSolveResponse }) {
         <thead>
           <tr>
             <th>覆面駒</th>
-            <th>初形で残る候補</th>
+            <th>初形での駒種候補</th>
           </tr>
         </thead>
         <tbody>
           {props.response.candidates.map((candidate) => (
             <tr key={candidate.id}>
               <td>V{candidate.id}</td>
-              <td>{candidate.kinds.join(", ") || "なし"}</td>
+              <td>
+                {candidate.kinds.map(japaneseCandidateKind).join("、") ||
+                  "なし"}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -953,6 +961,26 @@ function VariableResult(props: { response: VariableSolveResponse }) {
       )}
     </div>
   );
+}
+
+function japaneseCandidateKind(kind: string): string {
+  const names: Record<string, string> = {
+    P: "歩",
+    L: "香",
+    N: "桂",
+    S: "銀",
+    G: "金",
+    B: "角",
+    R: "飛",
+    K: "玉",
+    "+P": "と",
+    "+L": "杏",
+    "+N": "圭",
+    "+S": "全",
+    "+B": "馬",
+    "+R": "龍",
+  };
+  return names[kind] ?? kind;
 }
 
 function problemVariableToDraft(variable: ProblemVariable): VariableDraft {
