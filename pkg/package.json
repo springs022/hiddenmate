@@ -1,0 +1,20 @@
+{
+  "name": "wasm",
+  "type": "module",
+  "collaborators": [
+    "Your Name <you@example.com>"
+  ],
+  "version": "0.1.0",
+  "files": [
+    "index_bg.wasm",
+    "index.js",
+    "index_bg.js",
+    "index.d.ts"
+  ],
+  "main": "index.js",
+  "types": "index.d.ts",
+  "sideEffects": [
+    "./index.js",
+    "./snippets/*"
+  ]
+}
