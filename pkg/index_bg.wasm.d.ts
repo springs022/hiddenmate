@@ -13,6 +13,7 @@ export const backwardsearch_sfen: (a: number, b: number) => void;
 export const backwardsearch_step: (a: number) => number;
 export const check_one_way_mate: (a: number, b: number) => number;
 export const is_white_in_check: (a: number, b: number) => number;
+export const solve_variable_problem: (a: number, b: number, c: number, d: number) => void;
 export const __wbg_solver_free: (a: number, b: number) => void;
 export const solver_advance: (a: number, b: number) => void;
 export const solver_is_from_white: (a: number) => number;
