@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useReducer, useState } from "react";
 import {
   Alert,
   Button,
@@ -9,46 +9,42 @@ import {
   Row,
   Table,
 } from "react-bootstrap";
-import { Color, decodeSfen, emptyBoard } from "../../model";
+import {
+  Color,
+  Position,
+  clonePosition,
+  decodeSfen,
+  emptyHands,
+  encodeSfen,
+} from "../../model";
+import { positionPieceBox } from "../../model/position";
 import { solve_variable_problem } from "../../wasm_api";
+import { newState, reduce } from "../state/state";
 import Board from "./Board";
+import Hands from "./Hands";
 
-const candidateOptions = [
-  { code: "P", label: "歩" },
-  { code: "L", label: "香" },
-  { code: "N", label: "桂" },
-  { code: "S", label: "銀" },
-  { code: "G", label: "金" },
-  { code: "B", label: "角" },
-  { code: "R", label: "飛" },
-  { code: "K", label: "玉" },
-  { code: "+P", label: "と" },
-  { code: "+L", label: "杏" },
-  { code: "+N", label: "圭" },
-  { code: "+S", label: "全" },
-  { code: "+B", label: "馬" },
-  { code: "+R", label: "龍" },
-] as const;
-
-type CandidateCode = (typeof candidateOptions)[number]["code"];
 type InputMode = "form" | "json";
+type VariableLocation =
+  | { type: "board"; square: string }
+  | { type: "hand" };
 
 interface VariableDraft {
   id: number;
   color: Color;
+  location: VariableLocation;
+}
+
+interface ProblemVariable {
+  id: number;
+  color: Color;
   square?: string;
-  candidates: CandidateCode[];
+  inHand?: boolean;
 }
 
 interface ProblemDocument {
   baseSfen: string;
   plies: number;
-  variables: Array<{
-    id: number;
-    color: Color;
-    square: string;
-    candidates: CandidateCode[];
-  }>;
+  variables: ProblemVariable[];
 }
 
 interface VariableCandidates {
@@ -64,8 +60,26 @@ interface VariableSolveResponse {
 
 const initialBaseSfen = "9/9/kS7/N8/1L7/9/9/9/9 b - 1";
 const initialVariables: VariableDraft[] = [
-  { id: 1, color: "black", square: "64", candidates: ["R", "+R"] },
+  {
+    id: 1,
+    color: "black",
+    location: { type: "board", square: "64" },
+  },
 ];
+
+function editablePositionFromBaseSfen(sfen: string): Position {
+  const position = decodeSfen(sfen);
+  position.hands.white = emptyHands();
+  position.hands.white = positionPieceBox(position);
+  position.hands.white.K = 0;
+  return position;
+}
+
+function baseSfenFromPosition(position: Position): string {
+  const base = clonePosition(position);
+  base.hands.white = emptyHands();
+  return encodeSfen(base);
+}
 
 function buildProblemJson(
   baseSfen: string,
@@ -79,8 +93,9 @@ function buildProblemJson(
       variables: variables.map((variable) => ({
         id: variable.id,
         color: variable.color,
-        square: variable.square ?? "",
-        candidates: variable.candidates,
+        ...(variable.location.type === "board"
+          ? { square: variable.location.square }
+          : { inHand: true }),
       })),
     },
     null,
@@ -91,8 +106,13 @@ function buildProblemJson(
 const initialProblem = buildProblemJson(initialBaseSfen, 1, initialVariables);
 
 export function VariableSolver() {
+  const [editorState, dispatch] = useReducer(reduce, undefined, () => {
+    const state = newState();
+    state.position = editablePositionFromBaseSfen(initialBaseSfen);
+    return state;
+  });
   const [inputMode, setInputMode] = useState<InputMode>("form");
-  const [baseSfen, setBaseSfen] = useState(initialBaseSfen);
+  const [sfenInput, setSfenInput] = useState(initialBaseSfen);
   const [plies, setPlies] = useState(1);
   const [variables, setVariables] = useState<VariableDraft[]>(initialVariables);
   const [selectedId, setSelectedId] = useState<number>(1);
@@ -102,18 +122,11 @@ export function VariableSolver() {
   const [error, setError] = useState<string>();
   const [solving, setSolving] = useState(false);
 
-  const boardResult = (() => {
-    try {
-      return { board: decodeSfen(baseSfen).board, error: undefined };
-    } catch (reason) {
-      return {
-        board: emptyBoard(),
-        error: reason instanceof Error ? reason.message : String(reason),
-      };
-    }
-  })();
+  const baseSfen = baseSfenFromPosition(editorState.position);
   const selected = variables.find((variable) => variable.id === selectedId);
   const generatedProblem = buildProblemJson(baseSfen, plies, variables);
+
+  useEffect(() => setSfenInput(baseSfen), [baseSfen]);
 
   const clearResult = () => {
     setError(undefined);
@@ -128,9 +141,12 @@ export function VariableSolver() {
     clearResult();
   };
 
-  const addVariable = () => {
+  const addVariableToHand = (color: Color) => {
     const id = variables.reduce((max, variable) => Math.max(max, variable.id), 0) + 1;
-    setVariables([...variables, { id, color: "black", candidates: ["P"] }]);
+    setVariables([
+      ...variables,
+      { id, color, location: { type: "hand" } },
+    ]);
     setSelectedId(id);
     clearResult();
   };
@@ -153,45 +169,73 @@ export function VariableSolver() {
     clearResult();
   };
 
+  const variableAt = (square: string) =>
+    variables.find(
+      (variable) =>
+        variable.location.type === "board" &&
+        variable.location.square === square
+    );
+
   const clickBoard = ([row, col]: [number, number]) => {
     const square = `${col + 1}${row + 1}`;
-    const existing = variables.find((variable) => variable.square === square);
+    const existing = variableAt(square);
     if (existing) {
       setSelectedId(existing.id);
       setError(undefined);
       return;
     }
-    if (!selected) {
-      setError("先に「覆面駒を追加」を押してください");
+    if (selected) {
+      if (editorState.position.board[row][col]) {
+        setSelectedId(0);
+        dispatch({ ty: "click-board", pos: [row, col] });
+        clearResult();
+        return;
+      }
+      updateSelected({ location: { type: "board", square } });
       return;
     }
-    if (boardResult.board[row][col]) {
-      setError(`${square}には通常駒があります。base SFENでは覆面駒のマスを空けてください`);
-      return;
-    }
-    updateSelected({ square });
+    dispatch({ ty: "click-board", pos: [row, col] });
+    clearResult();
   };
 
   const rightClickBoard = ([row, col]: [number, number]) => {
     const square = `${col + 1}${row + 1}`;
-    const existing = variables.find((variable) => variable.square === square);
+    const existing = variableAt(square);
     if (existing) {
-      removeVariable(existing.id);
+      setSelectedId(existing.id);
+      return;
     }
+    dispatch({ ty: "right-click-board", pos: [row, col] });
+    clearResult();
   };
 
-  const toggleCandidate = (candidate: CandidateCode) => {
+  const clickKnownHand = (color: Color, kind: Parameters<typeof Hands>[0]["selected"]) => {
+    setSelectedId(0);
+    dispatch({
+      ty: "click-hand",
+      color,
+      kind: kind === "" ? undefined : kind,
+    });
+    clearResult();
+  };
+
+  const moveSelectedToHand = (color: Color) => {
     if (!selected) {
       return;
     }
-    const candidates = selected.candidates.includes(candidate)
-      ? selected.candidates.filter((value) => value !== candidate)
-      : candidateOptions
-          .map((option) => option.code)
-          .filter(
-            (value) => value === candidate || selected.candidates.includes(value)
-          );
-    updateSelected({ candidates });
+    updateSelected({ color, location: { type: "hand" } });
+  };
+
+  const loadSfen = () => {
+    try {
+      dispatch({
+        ty: "set-position",
+        position: editablePositionFromBaseSfen(sfenInput),
+      });
+      clearResult();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
   };
 
   const loadJsonIntoForm = () => {
@@ -200,10 +244,14 @@ export function VariableSolver() {
       if (!isProblemDocument(value)) {
         throw new Error("問題JSONの形式が正しくありません");
       }
-      setBaseSfen(value.baseSfen);
+      dispatch({
+        ty: "set-position",
+        position: editablePositionFromBaseSfen(value.baseSfen),
+      });
       setPlies(value.plies);
-      setVariables(value.variables);
-      setSelectedId(value.variables[0]?.id ?? 0);
+      const loaded = value.variables.map(problemVariableToDraft);
+      setVariables(loaded);
+      setSelectedId(loaded[0]?.id ?? 0);
       setInputMode("form");
       clearResult();
     } catch (reason) {
@@ -215,23 +263,8 @@ export function VariableSolver() {
     setSolving(true);
     clearResult();
     try {
-      if (inputMode === "form") {
-        if (boardResult.error) {
-          throw new Error(`base SFENを解釈できません: ${boardResult.error}`);
-        }
-        if (variables.length === 0) {
-          throw new Error("覆面駒を1枚以上追加してください");
-        }
-        const unplaced = variables.find((variable) => !variable.square);
-        if (unplaced) {
-          throw new Error(`V${unplaced.id}を盤面へ配置してください`);
-        }
-        const emptyCandidates = variables.find(
-          (variable) => variable.candidates.length === 0
-        );
-        if (emptyCandidates) {
-          throw new Error(`V${emptyCandidates.id}の候補駒種を選択してください`);
-        }
+      if (inputMode === "form" && variables.length === 0) {
+        throw new Error("覆面駒を1枚以上追加してください");
       }
       const json = solve_variable_problem(
         inputMode === "form" ? generatedProblem : manualProblem,
@@ -244,13 +277,6 @@ export function VariableSolver() {
       setSolving(false);
     }
   };
-
-  const selectedPosition = selected?.square
-    ? ([
-        Number(selected.square[1]) - 1,
-        Number(selected.square[0]) - 1,
-      ] as [number, number])
-    : undefined;
 
   return (
     <Card className="mb-4">
@@ -274,31 +300,58 @@ export function VariableSolver() {
         </ButtonGroup>
 
         {inputMode === "form" ? (
-          <FormInput
-            baseSfen={baseSfen}
-            setBaseSfen={(value) => {
-              setBaseSfen(value);
-              clearResult();
-            }}
-            plies={plies}
-            setPlies={(value) => {
-              setPlies(value);
-              clearResult();
-            }}
-            variables={variables}
-            selected={selected}
-            selectedPosition={selectedPosition}
-            setSelectedId={setSelectedId}
-            addVariable={addVariable}
-            removeVariable={removeVariable}
-            updateSelected={updateSelected}
-            toggleCandidate={toggleCandidate}
-            board={boardResult.board}
-            boardError={boardResult.error}
-            clickBoard={clickBoard}
-            rightClickBoard={rightClickBoard}
-            disabled={solving}
-          />
+          <Row className="g-4">
+            <Col xl={7}>
+              <Form.Group className="mb-2" controlId="variable-base-sfen">
+                <Form.Label>通常駒のbase SFEN</Form.Label>
+                <div className="d-flex gap-2">
+                  <Form.Control
+                    value={sfenInput}
+                    onChange={(event) => setSfenInput(event.target.value)}
+                    spellCheck={false}
+                  />
+                  <Button variant="outline-secondary" onClick={loadSfen}>
+                    読込
+                  </Button>
+                </div>
+              </Form.Group>
+              <Form.Text className="d-block mb-3">
+                通常駒は盤面・駒台をクリックして移動できます。右クリックで成・所属を切り替えます。
+              </Form.Text>
+              <VariablePositionEditor
+                position={editorState.position}
+                normalSelected={editorState.selected}
+                variables={variables}
+                selected={selected}
+                setSelectedId={setSelectedId}
+                clickBoard={clickBoard}
+                rightClickBoard={rightClickBoard}
+                clickKnownHand={clickKnownHand}
+                moveSelectedToHand={moveSelectedToHand}
+                addVariableToHand={addVariableToHand}
+              />
+            </Col>
+            <Col xl={5}>
+              <Form.Group className="mb-3 variable-plies" controlId="variable-plies">
+                <Form.Label>手数</Form.Label>
+                <Form.Control
+                  type="number"
+                  min={1}
+                  value={plies}
+                  onChange={(event) =>
+                    setPlies(Math.max(1, Number(event.target.value) || 1))
+                  }
+                />
+              </Form.Group>
+              <VariableSettings
+                variables={variables}
+                selected={selected}
+                setSelectedId={setSelectedId}
+                updateSelected={updateSelected}
+                removeVariable={removeVariable}
+              />
+            </Col>
+          </Row>
         ) : (
           <div>
             <Form.Group className="mb-2" controlId="variable-problem-json">
@@ -311,7 +364,6 @@ export function VariableSolver() {
                   setManualProblem(event.target.value);
                   clearResult();
                 }}
-                disabled={solving}
                 spellCheck={false}
               />
             </Form.Group>
@@ -347,189 +399,249 @@ export function VariableSolver() {
   );
 }
 
-function FormInput(props: {
-  baseSfen: string;
-  setBaseSfen: (value: string) => void;
-  plies: number;
-  setPlies: (value: number) => void;
+function VariablePositionEditor(props: {
+  position: Position;
+  normalSelected: ReturnType<typeof newState>["selected"];
   variables: VariableDraft[];
   selected?: VariableDraft;
-  selectedPosition?: [number, number];
   setSelectedId: (id: number) => void;
-  addVariable: () => void;
-  removeVariable: (id: number) => void;
-  updateSelected: (change: Partial<VariableDraft>) => void;
-  toggleCandidate: (candidate: CandidateCode) => void;
-  board: ReturnType<typeof emptyBoard>;
-  boardError?: string;
   clickBoard: (position: [number, number]) => void;
   rightClickBoard: (position: [number, number]) => void;
-  disabled: boolean;
+  clickKnownHand: (
+    color: Color,
+    kind: Parameters<typeof Hands>[0]["selected"]
+  ) => void;
+  moveSelectedToHand: (color: Color) => void;
+  addVariableToHand: (color: Color) => void;
+}) {
+  const boardSelected = props.selected?.location.type === "board"
+    ? squareToPosition(props.selected.location.square)
+    : props.normalSelected.shown && props.normalSelected.ty === "board"
+    ? props.normalSelected.pos
+    : undefined;
+  const selectedHand = (color: Color) =>
+    props.normalSelected.shown &&
+    props.normalSelected.ty === "hand" &&
+    props.normalSelected.color === color
+      ? props.normalSelected.kind ?? ""
+      : undefined;
+
+  return (
+    <div className="variable-position-editor">
+      <VariableHand
+        color="white"
+        hands={props.position.hands.white}
+        selectedKind={selectedHand("white")}
+        variables={props.variables}
+        selectedId={props.selected?.id}
+        onKnownClick={(kind) => props.clickKnownHand("white", kind)}
+        onVariableClick={props.setSelectedId}
+        onMoveSelected={() => props.moveSelectedToHand("white")}
+        onAdd={() => props.addVariableToHand("white")}
+      />
+      <CoordinateBoard
+        position={props.position}
+        variables={props.variables}
+        selectedId={props.selected?.id}
+        selectedPosition={boardSelected}
+        onClick={props.clickBoard}
+        onRightClick={props.rightClickBoard}
+      />
+      <VariableHand
+        color="black"
+        hands={props.position.hands.black}
+        selectedKind={selectedHand("black")}
+        variables={props.variables}
+        selectedId={props.selected?.id}
+        onKnownClick={(kind) => props.clickKnownHand("black", kind)}
+        onVariableClick={props.setSelectedId}
+        onMoveSelected={() => props.moveSelectedToHand("black")}
+        onAdd={() => props.addVariableToHand("black")}
+      />
+    </div>
+  );
+}
+
+function VariableHand(props: {
+  color: Color;
+  hands: Position["hands"][Color];
+  selectedKind: Parameters<typeof Hands>[0]["selected"];
+  variables: VariableDraft[];
+  selectedId?: number;
+  onKnownClick: Parameters<typeof Hands>[0]["onClick"];
+  onVariableClick: (id: number) => void;
+  onMoveSelected: () => void;
+  onAdd: () => void;
+}) {
+  const symbol = props.color === "black" ? "▲" : "△";
+  const label = props.color === "black" ? "攻方駒台" : "受方駒台（自動補完）";
+  const variables = props.variables.filter(
+    (variable) =>
+      variable.color === props.color && variable.location.type === "hand"
+  );
+  return (
+    <div className={`variable-hand variable-hand-${props.color}`}>
+      <div className="small fw-bold mb-1">{label}</div>
+      <Hands
+        hands={props.hands}
+        selected={props.selectedKind}
+        onClick={props.onKnownClick}
+      />
+      <div className="d-flex flex-wrap align-items-center gap-2 mt-1">
+        {variables.map((variable) => (
+          <Button
+            key={variable.id}
+            size="sm"
+            variant={
+              props.selectedId === variable.id ? "primary" : "outline-primary"
+            }
+            onClick={() => props.onVariableClick(variable.id)}
+          >
+            {symbol}V{variable.id}
+          </Button>
+        ))}
+        <Button size="sm" variant="outline-success" onClick={props.onAdd}>
+          ＋{symbol}覆面駒
+        </Button>
+        {props.selectedId !== undefined && (
+          <Button size="sm" variant="outline-secondary" onClick={props.onMoveSelected}>
+            選択中の覆面駒をここへ
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CoordinateBoard(props: {
+  position: Position;
+  variables: VariableDraft[];
+  selectedId?: number;
+  selectedPosition?: [number, number];
+  onClick: (position: [number, number]) => void;
+  onRightClick: (position: [number, number]) => void;
 }) {
   return (
-    <Row className="g-4">
-      <Col lg={6}>
-        <Form.Group className="mb-3" controlId="variable-base-sfen">
-          <Form.Label>通常駒のbase SFEN</Form.Label>
-          <Form.Control
-            value={props.baseSfen}
-            onChange={(event) => props.setBaseSfen(event.target.value)}
-            disabled={props.disabled}
-            spellCheck={false}
+    <div className="variable-board-coordinate-shell my-2">
+      <div className="variable-file-labels" aria-hidden="true">
+        {[9, 8, 7, 6, 5, 4, 3, 2, 1].map((file) => (
+          <span key={file}>{file}</span>
+        ))}
+      </div>
+      <div className="d-flex align-items-start">
+        <div className="variable-board-wrap">
+          <Board
+            pieces={props.position.board}
+            selected={props.selectedPosition}
+            onClick={props.onClick}
+            onRightClick={props.onRightClick}
+            overlay={([row, col]) => {
+              const square = `${col + 1}${row + 1}`;
+              const variable = props.variables.find(
+                (candidate) =>
+                  candidate.location.type === "board" &&
+                  candidate.location.square === square
+              );
+              return variable ? (
+                <div
+                  className={`variable-piece variable-piece-${variable.color}${
+                    props.selectedId === variable.id
+                      ? " variable-piece-selected"
+                      : ""
+                  }`}
+                >
+                  <span className="variable-owner-mark">
+                    {variable.color === "black" ? "▲" : "△"}
+                  </span>
+                  V{variable.id}
+                </div>
+              ) : undefined;
+            }}
+            squareLabel={([row, col]) => {
+              const square = `${col + 1}${row + 1}`;
+              const variable = props.variables.find(
+                (candidate) =>
+                  candidate.location.type === "board" &&
+                  candidate.location.square === square
+              );
+              return variable ? `${square} V${variable.id}` : square;
+            }}
           />
-          <Form.Text>
-            覆面駒を置くマスは空けます。受方持駒は標準駒数から補完されます。
-          </Form.Text>
-        </Form.Group>
-        <Form.Group className="mb-3 variable-plies" controlId="variable-plies">
-          <Form.Label>手数</Form.Label>
-          <Form.Control
-            type="number"
-            min={1}
-            value={props.plies}
-            onChange={(event) =>
-              props.setPlies(Math.max(1, Number(event.target.value) || 1))
-            }
-            disabled={props.disabled}
-          />
-        </Form.Group>
-        {props.boardError && (
-          <Alert variant="warning">base SFEN: {props.boardError}</Alert>
-        )}
-        <div className="variable-board-coordinate-shell">
-          <div className="variable-file-labels" aria-hidden="true">
-            {[9, 8, 7, 6, 5, 4, 3, 2, 1].map((file) => (
-              <span key={file}>{file}</span>
-            ))}
-          </div>
-          <div className="d-flex align-items-start">
-            <div className="variable-board-wrap">
-              <Board
-                pieces={props.board}
-                selected={props.selectedPosition}
-                onClick={props.clickBoard}
-                onRightClick={props.rightClickBoard}
-                overlay={([row, col]) => {
-                  const square = `${col + 1}${row + 1}`;
-                  const variable = props.variables.find(
-                    (candidate) => candidate.square === square
-                  );
-                  return variable ? (
-                    <div
-                      className={`variable-piece variable-piece-${variable.color}${
-                        props.selected?.id === variable.id
-                          ? " variable-piece-selected"
-                          : ""
-                      }`}
-                    >
-                      <span className="variable-owner-mark">
-                        {variable.color === "black" ? "▲" : "▽"}
-                      </span>
-                      V{variable.id}
-                    </div>
-                  ) : undefined;
-                }}
-                squareLabel={([row, col]) => {
-                  const square = `${col + 1}${row + 1}`;
-                  const variable = props.variables.find(
-                    (candidate) => candidate.square === square
-                  );
-                  return variable ? `${square} V${variable.id}` : square;
-                }}
-              />
-            </div>
-            <div className="variable-rank-labels" aria-hidden="true">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((rank) => (
-                <span key={rank}>{rank}</span>
-              ))}
-            </div>
-          </div>
         </div>
-        <Form.Text>
-          選択中の覆面駒を置くマスをクリックします。配置済みの覆面駒は右クリックで削除できます。
-        </Form.Text>
-      </Col>
-
-      <Col lg={6}>
-        <div className="d-flex flex-wrap gap-2 mb-3">
-          {props.variables.map((variable) => (
-            <Button
-              key={variable.id}
-              size="sm"
-              variant={
-                props.selected?.id === variable.id
-                  ? "primary"
-                  : "outline-primary"
-              }
-              onClick={() => props.setSelectedId(variable.id)}
-            >
-              V{variable.id} {variable.square ?? "未配置"}
-            </Button>
+        <div className="variable-rank-labels" aria-hidden="true">
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((rank) => (
+            <span key={rank}>{rank}</span>
           ))}
-          <Button
-            size="sm"
-            variant="outline-success"
-            onClick={props.addVariable}
-          >
-            ＋ 覆面駒を追加
-          </Button>
         </div>
+      </div>
+    </div>
+  );
+}
 
-        {props.selected ? (
-          <div className="variable-settings border rounded p-3">
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <h3 className="h6 mb-0">
-                V{props.selected.id}の設定
-                {props.selected.square && `（${props.selected.square}）`}
-              </h3>
-              <Button
-                size="sm"
-                variant="outline-danger"
-                onClick={() => props.removeVariable(props.selected!.id)}
-              >
-                削除
-              </Button>
-            </div>
-            <fieldset className="mb-3">
-              <legend className="form-label fs-6">所属</legend>
-              <Form.Check
-                inline
-                type="radio"
-                name={`variable-color-${props.selected.id}`}
-                label="先手（▲）"
-                checked={props.selected.color === "black"}
-                onChange={() => props.updateSelected({ color: "black" })}
-              />
-              <Form.Check
-                inline
-                type="radio"
-                name={`variable-color-${props.selected.id}`}
-                label="後手（▽）"
-                checked={props.selected.color === "white"}
-                onChange={() => props.updateSelected({ color: "white" })}
-              />
-            </fieldset>
-            <fieldset>
-              <legend className="form-label fs-6">候補駒種</legend>
-              <div className="variable-candidate-grid">
-                {candidateOptions.map((option) => (
-                  <Form.Check
-                    key={option.code}
-                    id={`variable-${props.selected!.id}-${option.code}`}
-                    type="checkbox"
-                    label={`${option.label}（${option.code}）`}
-                    checked={props.selected!.candidates.includes(option.code)}
-                    onChange={() => props.toggleCandidate(option.code)}
-                  />
-                ))}
-              </div>
-            </fieldset>
+function VariableSettings(props: {
+  variables: VariableDraft[];
+  selected?: VariableDraft;
+  setSelectedId: (id: number) => void;
+  updateSelected: (change: Partial<VariableDraft>) => void;
+  removeVariable: (id: number) => void;
+}) {
+  return (
+    <div>
+      <div className="d-flex flex-wrap gap-2 mb-3">
+        {props.variables.map((variable) => (
+          <Button
+            key={variable.id}
+            size="sm"
+            variant={
+              props.selected?.id === variable.id ? "primary" : "outline-primary"
+            }
+            onClick={() => props.setSelectedId(variable.id)}
+          >
+            V{variable.id} {locationLabel(variable.location)}
+          </Button>
+        ))}
+      </div>
+      {props.selected ? (
+        <div className="variable-settings border rounded p-3">
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <h3 className="h6 mb-0">
+              V{props.selected.id}の設定（{locationLabel(props.selected.location)}）
+            </h3>
+            <Button
+              size="sm"
+              variant="outline-danger"
+              onClick={() => props.removeVariable(props.selected!.id)}
+            >
+              削除
+            </Button>
           </div>
-        ) : (
-          <Alert variant="info">「覆面駒を追加」を押してください。</Alert>
-        )}
-      </Col>
-    </Row>
+          <fieldset>
+            <legend className="form-label fs-6">所属</legend>
+            <Form.Check
+              inline
+              type="radio"
+              name={`variable-color-${props.selected.id}`}
+              label="攻方（▲）"
+              checked={props.selected.color === "black"}
+              onChange={() => props.updateSelected({ color: "black" })}
+            />
+            <Form.Check
+              inline
+              type="radio"
+              name={`variable-color-${props.selected.id}`}
+              label="受方（△）"
+              checked={props.selected.color === "white"}
+              onChange={() => props.updateSelected({ color: "white" })}
+            />
+          </fieldset>
+          <p className="small text-muted mt-3 mb-0">
+            候補駒種は常に全14駒種です。駒台では合法な7駒種へ自動的に絞られます。
+          </p>
+        </div>
+      ) : (
+        <Alert variant="info">駒台の「＋覆面駒」で追加してください。</Alert>
+      )}
+    </div>
   );
 }
 
@@ -571,6 +683,20 @@ function VariableResult(props: { response: VariableSolveResponse }) {
   );
 }
 
+function problemVariableToDraft(variable: ProblemVariable): VariableDraft {
+  if (variable.inHand) {
+    return { id: variable.id, color: variable.color, location: { type: "hand" } };
+  }
+  if (variable.square) {
+    return {
+      id: variable.id,
+      color: variable.color,
+      location: { type: "board", square: variable.square },
+    };
+  }
+  throw new Error(`V${variable.id}の配置場所がありません`);
+}
+
 function isProblemDocument(value: unknown): value is ProblemDocument {
   if (!value || typeof value !== "object") {
     return false;
@@ -585,17 +711,21 @@ function isProblemDocument(value: unknown): value is ProblemDocument {
         return false;
       }
       const candidate = variable as Record<string, unknown>;
+      const hasLocation =
+        typeof candidate.square === "string" || candidate.inHand === true;
       return (
         typeof candidate.id === "number" &&
         (candidate.color === "black" || candidate.color === "white") &&
-        typeof candidate.square === "string" &&
-        Array.isArray(candidate.candidates) &&
-        candidate.candidates.every(
-          (kind) =>
-            typeof kind === "string" &&
-            candidateOptions.some((option) => option.code === kind)
-        )
+        hasLocation
       );
     })
   );
+}
+
+function locationLabel(location: VariableLocation): string {
+  return location.type === "board" ? location.square : "駒台";
+}
+
+function squareToPosition(square: string): [number, number] {
+  return [Number(square[1]) - 1, Number(square[0]) - 1];
 }

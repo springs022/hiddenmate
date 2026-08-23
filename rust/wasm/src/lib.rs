@@ -3,7 +3,7 @@ mod solver;
 mod utils;
 
 use fmrs_core::piece::Kind;
-use hiddenmate_core::{solve_exact, ProblemDocument};
+use hiddenmate_core::{format_solution_japanese, solve_exact, ProblemDocument};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -81,8 +81,8 @@ fn solve_variable_problem_json(json: &str, max_solutions: usize) -> anyhow::Resu
         })
         .collect();
     let solutions = solve_exact(&state, plies, max_solutions)
-        .into_iter()
-        .map(|solution| solution.into_iter().map(|mv| mv.to_string()).collect())
+        .iter()
+        .map(|solution| format_solution_japanese(&state, solution))
         .collect();
     let response = VariableSolveResponse {
         world_count: state.world_count(),
@@ -134,6 +134,6 @@ mod hiddenmate_tests {
             value["candidates"][0]["kinds"],
             serde_json::json!(["R", "+R"])
         );
-        assert_eq!(value["solutions"][0][0], "V1:64-84");
+        assert_eq!(value["solutions"][0][0], "84▲(64)");
     }
 }

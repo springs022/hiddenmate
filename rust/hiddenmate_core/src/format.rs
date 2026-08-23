@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use fmrs_core::{
-    piece::{Color, Kind},
+    piece::{Color, Kind, KINDS},
     position::Square,
 };
 use serde::Deserialize;
@@ -21,8 +21,10 @@ pub struct ProblemDocument {
 pub struct VariableDocument {
     pub id: u16,
     pub color: DocumentColor,
-    pub square: String,
-    pub candidates: Vec<String>,
+    pub square: Option<String>,
+    #[serde(default)]
+    pub in_hand: bool,
+    pub candidates: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -52,18 +54,27 @@ impl ProblemDocument {
 
 impl VariableDocument {
     fn into_spec(self) -> Result<VariableSpec> {
-        let candidates = self
-            .candidates
-            .iter()
-            .map(|candidate| parse_kind(candidate))
-            .collect::<Result<Vec<_>>>()?;
+        let candidates = match self.candidates {
+            Some(candidates) => candidates
+                .iter()
+                .map(|candidate| parse_kind(candidate))
+                .collect::<Result<Vec<_>>>()?,
+            None => KINDS.to_vec(),
+        };
+        let color = match self.color {
+            DocumentColor::Black => Color::BLACK,
+            DocumentColor::White => Color::WHITE,
+        };
+        let location = match (self.square, self.in_hand) {
+            (Some(square), false) => crate::VariableLocation::Board(parse_square(&square)?),
+            (None, true) => crate::VariableLocation::Hand(color),
+            (Some(_), true) => bail!("覆面駒V{}にsquareとinHandの両方が指定されています", self.id),
+            (None, false) => bail!("覆面駒V{}の配置場所が指定されていません", self.id),
+        };
         Ok(VariableSpec {
             id: VariableId(self.id),
-            color: match self.color {
-                DocumentColor::Black => Color::BLACK,
-                DocumentColor::White => Color::WHITE,
-            },
-            square: parse_square(&self.square)?,
+            color,
+            location,
             candidates,
         })
     }
@@ -112,9 +123,9 @@ mod tests {
                 "baseSfen": "9/9/k8/9/9/9/9/9/9 b - 1",
                 "plies": 1,
                 "variables": [{
-                    "id": 7,
-                    "color": "black",
-                    "square": "64",
+                "id": 7,
+                "color": "black",
+                "square": "64",
                     "candidates": ["R", "+R"]
                 }]
             }"#,
@@ -125,8 +136,30 @@ mod tests {
         let problem = document.into_problem().unwrap();
         assert_eq!(problem.variables[0].id, VariableId(7));
         assert_eq!(
+            problem.variables[0].location,
+            crate::VariableLocation::Board(Square::new(5, 3))
+        );
+        assert_eq!(
             problem.variables[0].candidates,
             vec![Kind::Rook, Kind::ProRook]
+        );
+    }
+
+    #[test]
+    fn defaults_to_all_kinds_and_parses_hand_location() {
+        let document = ProblemDocument::from_json(
+            r#"{
+                "baseSfen": "9/9/k8/9/9/9/9/9/9 b - 1",
+                "plies": 1,
+                "variables": [{"id": 2, "color": "white", "inHand": true}]
+            }"#,
+        )
+        .unwrap();
+        let problem = document.into_problem().unwrap();
+        assert_eq!(problem.variables[0].candidates, KINDS);
+        assert_eq!(
+            problem.variables[0].location,
+            crate::VariableLocation::Hand(Color::WHITE)
         );
     }
 }

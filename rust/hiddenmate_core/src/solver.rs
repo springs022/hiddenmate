@@ -1,6 +1,108 @@
-use crate::{HiddenState, ObservedMove};
+use fmrs_core::piece::{Color, Kind};
+
+use crate::{DropIdentity, HiddenState, MoveIdentity, ObservedMove};
 
 pub type Solution = Vec<ObservedMove>;
+
+/// 手順を、通常駒の駒種と覆面駒の所属が分かる日本語表記にする。
+pub fn format_solution_japanese(initial: &HiddenState, solution: &Solution) -> Vec<String> {
+    let mut state = initial.clone();
+    let mut result = Vec::with_capacity(solution.len());
+    for &observed in solution {
+        result.push(format_observed_japanese(&state, observed));
+        state = state
+            .apply(observed)
+            .expect("解手順は現在の候補世界で適用できる");
+    }
+    result
+}
+
+fn format_observed_japanese(state: &HiddenState, observed: ObservedMove) -> String {
+    match observed {
+        ObservedMove::Move {
+            identity: MoveIdentity::Known,
+            source,
+            destination,
+            promote,
+        } => {
+            let kind = state.worlds()[0]
+                .position()
+                .get(source)
+                .expect("既知駒の移動元に駒がある")
+                .1;
+            format!(
+                "{}{}{}({})",
+                square_label(source),
+                japanese_kind(kind),
+                if promote { "成" } else { "" },
+                square_label(destination)
+            )
+        }
+        ObservedMove::Move {
+            identity: MoveIdentity::Variable(id),
+            source,
+            destination,
+            promote,
+        } => {
+            let color = state.worlds()[0]
+                .variable(id)
+                .expect("覆面駒が存在する")
+                .color;
+            format!(
+                "{}{}{}({})",
+                square_label(destination),
+                color_symbol(color),
+                if promote { "成" } else { "" },
+                square_label(source)
+            )
+        }
+        ObservedMove::Drop {
+            identity: DropIdentity::Known(kind),
+            destination,
+        } => format!("{}{}打", square_label(destination), japanese_kind(kind)),
+        ObservedMove::Drop {
+            identity: DropIdentity::Variable(id),
+            destination,
+        } => {
+            let color = state.worlds()[0]
+                .variable(id)
+                .expect("覆面駒が存在する")
+                .color;
+            format!("{}{}打", square_label(destination), color_symbol(color))
+        }
+    }
+}
+
+fn square_label(square: fmrs_core::position::Square) -> String {
+    format!("{}{}", square.col() + 1, square.row() + 1)
+}
+
+fn color_symbol(color: Color) -> &'static str {
+    if color.is_black() {
+        "▲"
+    } else {
+        "△"
+    }
+}
+
+fn japanese_kind(kind: Kind) -> &'static str {
+    match kind {
+        Kind::Pawn => "歩",
+        Kind::Lance => "香",
+        Kind::Knight => "桂",
+        Kind::Silver => "銀",
+        Kind::Gold => "金",
+        Kind::Bishop => "角",
+        Kind::Rook => "飛",
+        Kind::King => "玉",
+        Kind::ProPawn => "と",
+        Kind::ProLance => "杏",
+        Kind::ProKnight => "圭",
+        Kind::ProSilver => "全",
+        Kind::ProBishop => "馬",
+        Kind::ProRook => "龍",
+    }
+}
 
 /// 指定手数ちょうどで詰む協力手順を列挙する初期実装。
 ///
@@ -46,5 +148,71 @@ fn solve_inner(
         if solutions.len() >= max_solutions {
             break;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use fmrs_core::{
+        piece::{Color, Kind},
+        position::Square,
+    };
+
+    use super::*;
+    use crate::{VariableId, VariableLocation, VariableProblem, VariableSpec};
+
+    fn state_with_variable(color: Color) -> HiddenState {
+        VariableProblem {
+            base_sfen: "9/9/kS7/N8/1L7/9/9/9/9 b - 1".to_string(),
+            variables: vec![VariableSpec {
+                id: VariableId(1),
+                color,
+                location: VariableLocation::Board(Square::S64),
+                candidates: vec![Kind::Rook],
+            }],
+        }
+        .enumerate()
+        .unwrap()
+    }
+
+    #[test]
+    fn formats_known_move_and_drop_in_japanese() {
+        let state = state_with_variable(Color::BLACK);
+        assert_eq!(
+            format_observed_japanese(
+                &state,
+                ObservedMove::Move {
+                    identity: MoveIdentity::Known,
+                    source: Square::S83,
+                    destination: Square::S82,
+                    promote: false,
+                }
+            ),
+            "83銀(82)"
+        );
+        assert_eq!(
+            format_observed_japanese(
+                &state,
+                ObservedMove::Drop {
+                    identity: DropIdentity::Known(Kind::Pawn),
+                    destination: Square::S92,
+                }
+            ),
+            "92歩打"
+        );
+    }
+
+    #[test]
+    fn formats_variable_with_owner_symbol() {
+        let black = state_with_variable(Color::BLACK);
+        let white = state_with_variable(Color::WHITE);
+        let observed = ObservedMove::Move {
+            identity: MoveIdentity::Variable(VariableId(1)),
+            source: Square::S64,
+            destination: Square::S84,
+            promote: false,
+        };
+        assert_eq!(format_observed_japanese(&black, observed), "84▲(64)");
+        assert_eq!(format_observed_japanese(&white, observed), "84△(64)");
     }
 }

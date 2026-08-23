@@ -5,8 +5,7 @@
     {
       "id": 1,
       "color": "black",
-      "square": "64",
-      "candidates": ["R", "+R"]
+      "square": "64"
     }
   ]
 }

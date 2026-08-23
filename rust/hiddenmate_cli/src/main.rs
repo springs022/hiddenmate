@@ -2,7 +2,7 @@ use std::{fs, path::PathBuf};
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use hiddenmate_core::{solve_exact, ProblemDocument};
+use hiddenmate_core::{format_solution_japanese, solve_exact, ProblemDocument};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -35,11 +35,7 @@ fn main() -> Result<()> {
     let solutions = solve_exact(&state, plies, arguments.max_solutions);
     println!("解数: {}", solutions.len());
     for (index, solution) in solutions.iter().enumerate() {
-        let moves = solution
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(" ");
+        let moves = format_solution_japanese(&state, solution).join(" ");
         println!("{}: {}", index + 1, moves);
     }
     Ok(())

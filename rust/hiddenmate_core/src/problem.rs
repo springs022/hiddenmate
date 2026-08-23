@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use anyhow::{bail, Context, Result};
 use fmrs_core::{
     piece::{Color, Kind, KINDS, NUM_HAND_KIND},
-    position::{position::PositionAux, Square},
+    position::position::PositionAux,
 };
 
 use crate::{ConcreteWorld, HiddenState, VariableId, VariableLocation, VariablePiece};
@@ -13,7 +13,7 @@ use crate::{ConcreteWorld, HiddenState, VariableId, VariableLocation, VariablePi
 pub struct VariableSpec {
     pub id: VariableId,
     pub color: Color,
-    pub square: Square,
+    pub location: VariableLocation,
     pub candidates: Vec<Kind>,
 }
 
@@ -54,11 +54,15 @@ fn validate_specs(base: &PositionAux, specs: &[VariableSpec]) -> Result<()> {
         if !ids.insert(spec.id) {
             bail!("覆面駒ID {:?} が重複しています", spec.id);
         }
-        if !squares.insert(spec.square) {
-            bail!("覆面駒の配置マス {:?} が重複しています", spec.square);
-        }
-        if base.get(spec.square).is_some() {
-            bail!("覆面駒の配置マス {:?} に通常駒があります", spec.square);
+        if let VariableLocation::Board(square) = spec.location {
+            if !squares.insert(square) {
+                bail!("覆面駒の配置マス {:?} が重複しています", square);
+            }
+            if base.get(square).is_some() {
+                bail!("覆面駒の配置マス {:?} に通常駒があります", square);
+            }
+        } else if spec.location != VariableLocation::Hand(spec.color) {
+            bail!("覆面駒ID {:?} の所属と駒台が一致しません", spec.id);
         }
         if spec.candidates.is_empty() {
             bail!("覆面駒ID {:?} の候補が空です", spec.id);
@@ -92,7 +96,7 @@ fn enumerate_assignments(
             id: spec.id,
             color: spec.color,
             kind,
-            location: VariableLocation::Board(spec.square),
+            location: spec.location,
         });
         enumerate_assignments(base, specs, index + 1, next, worlds);
     }
@@ -100,13 +104,20 @@ fn enumerate_assignments(
 
 fn build_world(mut position: PositionAux, variables: Vec<VariablePiece>) -> Option<ConcreteWorld> {
     for piece in &variables {
-        let VariableLocation::Board(square) = piece.location else {
-            return None;
-        };
-        if position.get(square).is_some() {
-            return None;
+        match piece.location {
+            VariableLocation::Board(square) => {
+                if position.get(square).is_some() {
+                    return None;
+                }
+                position.set(square, piece.color, piece.kind);
+            }
+            VariableLocation::Hand(color) => {
+                if piece.kind.index() >= NUM_HAND_KIND || color != piece.color {
+                    return None;
+                }
+                position.hands_mut().add(color, piece.kind);
+            }
         }
-        position.set(square, piece.color, piece.kind);
     }
 
     // 王以外の不足駒をすべて受方持駒として補完する。成駒も生駒と

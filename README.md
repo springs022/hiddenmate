@@ -8,7 +8,8 @@
 
 最初の覆面駒MVPを実装中です。現在は次に対応しています。
 
-- 通常将棋14駒種を候補とする、位置・所属既知の覆面駒
+- 候補を常に通常将棋の全14駒種とする、位置・所属既知の覆面駒
+- 盤上と攻方・受方駒台への覆面駒配置
 - 複数候補世界の列挙
 - 標準駒数からの受方持駒補完
 - 初形の二歩、行き所、王数、王手状態による候補除外
@@ -18,9 +19,10 @@
 - 指定手数の協力手順列挙
 - JSON問題形式とCLI
 - WebAssembly経由のWeb検討（JSON入力、候補世界・解答表示）
-- Web盤面での覆面駒配置、所属・候補駒種・手数のフォーム入力
+- Web盤面と両方の駒台での通常駒・覆面駒編集
+- ▲・△を使った日本語の解答表示
 
-Web版は [HiddenMate](https://springs022.github.io/hiddenmate/) で試せます。入力済みのサンプル問題は「覆面駒を検討」ボタンだけで実行できます。通常駒はbase SFEN、覆面駒は盤面クリックと候補チェックボックスで編集できます。透明駒は今後実装します。
+Web版は [HiddenMate](https://springs022.github.io/hiddenmate/) で試せます。入力済みのサンプル問題は「覆面駒を検討」ボタンだけで実行できます。盤面と駒台をクリックして通常駒を移動でき、覆面駒は盤上または攻方・受方駒台に配置できます。候補駒種は選択せず、常に全14駒種です（駒台では合法な7駒種へ自動的に絞られます）。透明駒は今後実装します。
 
 ## CLI
 
@@ -34,10 +36,12 @@ cargo run -p hiddenmate_cli -- ../examples/variable-rook-dragon.json
 出力例：
 
 ```text
-初形候補世界: 2
-  V1: {Rook, ProRook}
-解数: 1
-1: V1:64-84
+初形候補世界: 14
+  V1: {Pawn, Lance, Knight, Silver, Gold, Bishop, Rook, King, ProPawn, ProLance, ProKnight, ProSilver, ProBishop, ProRook}
+解数: 3
+1: 82▲(64)
+2: 82▲成(64)
+3: 84▲(64)
 ```
 
 問題形式は [design/problem-format.md](design/problem-format.md) を参照してください。

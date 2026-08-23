@@ -3,7 +3,8 @@ use fmrs_core::{
     position::Square,
 };
 use hiddenmate_core::{
-    solve_exact, MoveIdentity, ObservedMove, VariableId, VariableProblem, VariableSpec,
+    format_solution_japanese, solve_exact, MoveIdentity, ObservedMove, VariableId,
+    VariableLocation, VariableProblem, VariableSpec,
 };
 
 fn square(file: usize, rank: usize) -> Square {
@@ -17,7 +18,7 @@ fn enumerates_candidate_worlds_and_completes_white_hand() {
         variables: vec![VariableSpec {
             id: VariableId(1),
             color: Color::BLACK,
-            square: square(6, 4),
+            location: VariableLocation::Board(square(6, 4)),
             candidates: vec![Kind::Rook, Kind::ProRook],
         }],
     }
@@ -45,7 +46,7 @@ fn checking_obligation_resolves_rook_to_promoted_rook() {
         variables: vec![VariableSpec {
             id: VariableId(7),
             color: Color::BLACK,
-            square: square(6, 4),
+            location: VariableLocation::Board(square(6, 4)),
             candidates: vec![Kind::Rook, Kind::ProRook],
         }],
     }
@@ -74,7 +75,7 @@ fn solves_one_ply_variable_helpmate() {
         variables: vec![VariableSpec {
             id: VariableId(1),
             color: Color::BLACK,
-            square: square(6, 4),
+            location: VariableLocation::Board(square(6, 4)),
             candidates: vec![Kind::Rook, Kind::ProRook],
         }],
     }
@@ -85,6 +86,10 @@ fn solves_one_ply_variable_helpmate() {
     assert_eq!(solutions.len(), 1);
     assert_eq!(solutions[0].len(), 1);
     assert_eq!(solutions[0][0].to_string(), "V1:64-84");
+    assert_eq!(
+        format_solution_japanese(&state, &solutions[0]),
+        vec!["84▲(64)"]
+    );
 
     let final_state = state.apply(solutions[0][0]).unwrap();
     assert!(final_state.is_proven_mate());
@@ -102,13 +107,13 @@ fn rejects_duplicate_variable_ids() {
             VariableSpec {
                 id: VariableId(1),
                 color: Color::BLACK,
-                square: square(6, 4),
+                location: VariableLocation::Board(square(6, 4)),
                 candidates: vec![Kind::Rook],
             },
             VariableSpec {
                 id: VariableId(1),
                 color: Color::BLACK,
-                square: square(7, 4),
+                location: VariableLocation::Board(square(7, 4)),
                 candidates: vec![Kind::Bishop],
             },
         ],
@@ -117,4 +122,31 @@ fn rejects_duplicate_variable_ids() {
     .unwrap_err();
 
     assert!(error.to_string().contains("重複"));
+}
+
+#[test]
+fn enumerates_variable_in_hand_and_can_observe_its_drop() {
+    let state = VariableProblem {
+        base_sfen: "9/9/k8/9/9/9/9/9/9 b - 1".to_string(),
+        variables: vec![VariableSpec {
+            id: VariableId(4),
+            color: Color::BLACK,
+            location: VariableLocation::Hand(Color::BLACK),
+            candidates: fmrs_core::piece::KINDS.to_vec(),
+        }],
+    }
+    .enumerate()
+    .unwrap();
+
+    assert_eq!(state.world_count(), 7);
+    assert!(state.worlds().iter().all(|world| {
+        world.variable(VariableId(4)).unwrap().location == VariableLocation::Hand(Color::BLACK)
+    }));
+    assert!(state.observed_moves().iter().any(|observed| matches!(
+        observed,
+        ObservedMove::Drop {
+            identity: hiddenmate_core::DropIdentity::Variable(VariableId(4)),
+            ..
+        }
+    )));
 }
