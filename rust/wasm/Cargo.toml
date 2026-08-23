@@ -12,8 +12,11 @@ default = ["console_error_panic_hook"]
 
 [dependencies]
 fmrs_core = { path = "../fmrs_core" }
+hiddenmate_core = { path = "../hiddenmate_core" }
 wasm-bindgen = "*"
 getrandom = { version = "0.2.17", features = ["js"] }
+serde = { version = "*", features = ["derive"] }
+serde_json = "*"
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires
