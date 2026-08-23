@@ -22,9 +22,34 @@ code {
   max-width: 32rem;
 }
 
+.variable-result-table th:first-child {
+  white-space: nowrap;
+}
+
 .variable-sfen-input {
   padding-top: 0.2rem;
   padding-bottom: 0.2rem;
+}
+
+@media (min-width: 1200px) {
+  .variable-sfen-input {
+    max-width: 250px;
+  }
+
+  .variable-three-column-layout > .variable-layout-board {
+    flex: 0 0 32%;
+    max-width: 32%;
+  }
+
+  .variable-three-column-layout > .variable-layout-settings {
+    flex: 0 0 31%;
+    max-width: 31%;
+  }
+
+  .variable-three-column-layout > .variable-layout-results {
+    flex: 0 0 37%;
+    max-width: 37%;
+  }
 }
 
 .variable-control-number {

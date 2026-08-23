@@ -435,7 +435,7 @@ export function VariableSolver() {
               </div>
             </Form.Group>
             <Row className="g-4 variable-three-column-layout">
-              <Col xl={4}>
+              <Col xl={4} className="variable-layout-board">
                 <VariablePositionEditor
                   position={editorState.position}
                   normalSelected={editorState.selected}
@@ -447,7 +447,7 @@ export function VariableSolver() {
                   moveSelectedToHand={moveSelectedToHand}
                 />
               </Col>
-              <Col xl={4}>
+              <Col xl={4} className="variable-layout-settings">
                 <VariableSavedPositions
                   positions={savedPositions}
                   defaultName={baseSfen}
@@ -464,7 +464,7 @@ export function VariableSolver() {
                   addVariableToHand={addVariableToHand}
                 />
               </Col>
-              <Col xl={4}>
+              <Col xl={4} className="variable-layout-results">
                 <VariableSolveControls
                   plies={plies}
                   setPlies={setPlies}
