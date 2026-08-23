@@ -2,6 +2,8 @@ import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import App from "./App";
 
+beforeEach(() => localStorage.clear());
+
 test("renders HiddenMate title", () => {
   render(<App />);
   expect(screen.getByRole("heading", { name: "HiddenMate" })).not.toBeNull();
@@ -30,6 +32,8 @@ test("renders HiddenMate title", () => {
     screen.queryByText(/通常駒は盤面・駒台をクリックして移動できます/),
   ).toBeNull();
   expect(screen.getByRole("button", { name: "覆面駒を検討" })).not.toBeNull();
+  expect(screen.getByRole("heading", { name: "Saved positions" })).not.toBeNull();
+  expect(screen.queryByRole("heading", { name: "通常協力詰" })).toBeNull();
 });
 
 test("places variable solve controls below the variable control panel", () => {
@@ -56,5 +60,19 @@ test("moves a selected standard piece by clicking the hand background", () => {
   expect(silverSquare.textContent).not.toContain("銀");
   expect(container.querySelector(".variable-hand-black")?.textContent).toContain(
     "銀1",
+  );
+});
+
+test("saves the current variable position with a name", () => {
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "現在の局面を保存" }));
+  fireEvent.change(screen.getByLabelText("保存名"), {
+    target: { value: "テスト局面" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+  expect(screen.getByRole("button", { name: "テスト局面" })).not.toBeNull();
+  expect(localStorage.getItem("hiddenmate_variable_saved_positions")).toContain(
+    "テスト局面",
   );
 });

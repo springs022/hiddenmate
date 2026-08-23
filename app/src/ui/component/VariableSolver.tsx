@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -56,6 +56,11 @@ interface VariableSolveResponse {
   solutions: string[][];
 }
 
+interface SavedVariableProblem {
+  name: string;
+  problem: ProblemDocument;
+}
+
 const initialBaseSfen = "9/9/kS7/N8/1L7/9/9/9/9 b - 1";
 const singleKingBaseSfen = "4k4/9/9/9/9/9/9/9/9 b - 1";
 const doubleKingBaseSfen = "4k4/9/9/9/9/9/9/9/4K4 b - 1";
@@ -66,6 +71,8 @@ const initialVariables: VariableDraft[] = [
     location: { type: "board", square: "64" },
   },
 ];
+const savedPositionsKey = "hiddenmate_variable_saved_positions";
+const maxSavedPositions = 20;
 
 function editablePositionFromBaseSfen(sfen: string): Position {
   const position = decodeSfen(sfen);
@@ -86,21 +93,52 @@ function buildProblemJson(
   plies: number,
   variables: VariableDraft[],
 ): string {
-  return JSON.stringify(
-    {
-      baseSfen,
-      plies,
-      variables: variables.map((variable) => ({
-        id: variable.id,
-        color: variable.color,
-        ...(variable.location.type === "board"
-          ? { square: variable.location.square }
-          : { inHand: true }),
-      })),
-    },
-    null,
-    2,
-  );
+  return JSON.stringify(buildProblemDocument(baseSfen, plies, variables), null, 2);
+}
+
+function buildProblemDocument(
+  baseSfen: string,
+  plies: number,
+  variables: VariableDraft[],
+): ProblemDocument {
+  return {
+    baseSfen,
+    plies,
+    variables: variables.map((variable) => ({
+      id: variable.id,
+      color: variable.color,
+      ...(variable.location.type === "board"
+        ? { square: variable.location.square }
+        : { inHand: true }),
+    })),
+  };
+}
+
+function loadSavedVariableProblems(): SavedVariableProblem[] {
+  try {
+    const raw = localStorage.getItem(savedPositionsKey);
+    if (!raw) {
+      return [];
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .filter((entry): entry is SavedVariableProblem => {
+        if (!entry || typeof entry !== "object") {
+          return false;
+        }
+        const candidate = entry as Record<string, unknown>;
+        return (
+          typeof candidate.name === "string" &&
+          isProblemDocument(candidate.problem)
+        );
+      })
+      .slice(0, maxSavedPositions);
+  } catch {
+    return [];
+  }
 }
 
 const initialProblem = buildProblemJson(initialBaseSfen, 1, initialVariables);
@@ -121,12 +159,22 @@ export function VariableSolver() {
   const [response, setResponse] = useState<VariableSolveResponse>();
   const [error, setError] = useState<string>();
   const [solving, setSolving] = useState(false);
+  const [savedPositions, setSavedPositions] = useState<SavedVariableProblem[]>(
+    loadSavedVariableProblems,
+  );
 
   const baseSfen = baseSfenFromPosition(editorState.position);
   const selected = variables.find((variable) => variable.id === selectedId);
   const generatedProblem = buildProblemJson(baseSfen, plies, variables);
 
   useEffect(() => setSfenInput(baseSfen), [baseSfen]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(savedPositionsKey, JSON.stringify(savedPositions));
+    } catch {
+      // 保存容量不足などの場合も、盤面編集と検討は継続できるようにする。
+    }
+  }, [savedPositions]);
 
   const clearResult = () => {
     setError(undefined);
@@ -249,25 +297,44 @@ export function VariableSolver() {
     clearResult();
   };
 
+  const applyProblemToForm = (problem: ProblemDocument) => {
+    dispatch({
+      ty: "set-position",
+      position: editablePositionFromBaseSfen(problem.baseSfen),
+    });
+    setPlies(problem.plies);
+    const loaded = problem.variables.map(problemVariableToDraft);
+    setVariables(loaded);
+    setSelectedId(loaded[0]?.id ?? 0);
+    setInputMode("form");
+    clearResult();
+  };
+
   const loadJsonIntoForm = () => {
     try {
       const value: unknown = JSON.parse(manualProblem);
       if (!isProblemDocument(value)) {
         throw new Error("問題JSONの形式が正しくありません");
       }
-      dispatch({
-        ty: "set-position",
-        position: editablePositionFromBaseSfen(value.baseSfen),
-      });
-      setPlies(value.plies);
-      const loaded = value.variables.map(problemVariableToDraft);
-      setVariables(loaded);
-      setSelectedId(loaded[0]?.id ?? 0);
-      setInputMode("form");
-      clearResult();
+      applyProblemToForm(value);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
+  };
+
+  const saveCurrentPosition = (name: string) => {
+    const trimmed = name.trim() || baseSfen;
+    const saved = {
+      name: trimmed,
+      problem: buildProblemDocument(baseSfen, plies, variables),
+    };
+    setSavedPositions((current) =>
+      [saved, ...current].slice(0, maxSavedPositions),
+    );
+  };
+
+  const deleteSavedPosition = (index: number) => {
+    setSavedPositions((current) => current.filter((_, i) => i !== index));
   };
 
   const solve = () => {
@@ -364,6 +431,14 @@ export function VariableSolver() {
               />
             </Col>
             <Col xl={5}>
+              <VariableSavedPositions
+                positions={savedPositions}
+                defaultName={baseSfen}
+                disabled={solving}
+                onSave={saveCurrentPosition}
+                onLoad={(position) => applyProblemToForm(position.problem)}
+                onDelete={deleteSavedPosition}
+              />
               <VariableControls
                 variables={variables}
                 selected={selected}
@@ -420,6 +495,103 @@ export function VariableSolver() {
         )}
       </Card.Body>
     </Card>
+  );
+}
+
+function VariableSavedPositions(props: {
+  positions: SavedVariableProblem[];
+  defaultName: string;
+  disabled: boolean;
+  onSave: (name: string) => void;
+  onLoad: (position: SavedVariableProblem) => void;
+  onDelete: (index: number) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const startAdding = () => {
+    setName(props.defaultName);
+    setAdding(true);
+    setTimeout(() => inputRef.current?.select(), 0);
+  };
+  const confirmAdd = () => {
+    props.onSave(name);
+    setAdding(false);
+  };
+
+  return (
+    <div className="variable-saved-positions border rounded p-3 mb-3">
+      <div className="d-flex align-items-center gap-2 mb-2">
+        <h3 className="h6 mb-0">Saved positions</h3>
+        {!adding && (
+          <Button
+            aria-label="現在の局面を保存"
+            size="sm"
+            variant="secondary"
+            onClick={startAdding}
+            disabled={props.disabled}
+          >
+            ＋
+          </Button>
+        )}
+      </div>
+      {adding && (
+        <div className="d-flex gap-1 mb-2">
+          <Form.Control
+            ref={inputRef}
+            aria-label="保存名"
+            size="sm"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") confirmAdd();
+              if (event.key === "Escape") setAdding(false);
+            }}
+          />
+          <Button size="sm" onClick={confirmAdd}>
+            Save
+          </Button>
+          <Button
+            aria-label="保存をキャンセル"
+            size="sm"
+            variant="outline-secondary"
+            onClick={() => setAdding(false)}
+          >
+            ×
+          </Button>
+        </div>
+      )}
+      {props.positions.length === 0 ? (
+        <div className="small text-muted">保存された局面はありません。</div>
+      ) : (
+        <div className="d-grid gap-1">
+          {props.positions.map((position, index) => (
+            <div className="d-flex gap-1" key={`${index}-${position.name}`}>
+              <Button
+                className="flex-grow-1 text-start text-truncate"
+                size="sm"
+                variant="outline-secondary"
+                title={position.name}
+                onClick={() => props.onLoad(position)}
+                disabled={props.disabled}
+              >
+                {position.name}
+              </Button>
+              <Button
+                aria-label={`${position.name}を削除`}
+                size="sm"
+                variant="outline-danger"
+                onClick={() => props.onDelete(index)}
+                disabled={props.disabled}
+              >
+                ×
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
