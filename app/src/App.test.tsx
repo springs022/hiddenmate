@@ -14,8 +14,9 @@ test("renders HiddenMate title", () => {
   expect(screen.getByLabelText("通常駒のbase SFEN")).not.toBeNull();
   expect(screen.getByText("受方駒台（自動補完）")).not.toBeNull();
   expect(screen.getByText("攻方駒台")).not.toBeNull();
-  expect(screen.getByRole("button", { name: "単玉" })).not.toBeNull();
-  expect(screen.getByRole("button", { name: "双玉" })).not.toBeNull();
+  expect(screen.getByRole("button", { name: "単玉のみ" })).not.toBeNull();
+  expect(screen.getByRole("button", { name: "双玉のみ" })).not.toBeNull();
+  expect(screen.queryByText("盤面をリセット")).toBeNull();
   expect(
     screen.getByRole("heading", { name: "覆面駒の新規追加" }),
   ).not.toBeNull();
@@ -75,4 +76,14 @@ test("saves the current variable position with a name", () => {
   expect(localStorage.getItem("hiddenmate_variable_saved_positions")).toContain(
     "テスト局面",
   );
+});
+
+test("loads the default single-king position from saved positions", () => {
+  const { container } = render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "単玉のみ" }));
+
+  expect(
+    (screen.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
+  ).toBe("4k4/9/9/9/9/9/9/9/9 b - 1");
+  expect(container.querySelector(".variable-piece")).toBeNull();
 });

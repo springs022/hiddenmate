@@ -61,6 +61,11 @@ interface SavedVariableProblem {
   problem: ProblemDocument;
 }
 
+interface SavedVariableProblemStore {
+  version: 1;
+  positions: SavedVariableProblem[];
+}
+
 const initialBaseSfen = "9/9/kS7/N8/1L7/9/9/9/9 b - 1";
 const singleKingBaseSfen = "4k4/9/9/9/9/9/9/9/9 b - 1";
 const doubleKingBaseSfen = "4k4/9/9/9/9/9/9/9/4K4 b - 1";
@@ -73,6 +78,19 @@ const initialVariables: VariableDraft[] = [
 ];
 const savedPositionsKey = "hiddenmate_variable_saved_positions";
 const maxSavedPositions = 20;
+
+function defaultSavedVariableProblems(): SavedVariableProblem[] {
+  return [
+    {
+      name: "単玉のみ",
+      problem: buildProblemDocument(singleKingBaseSfen, 1, []),
+    },
+    {
+      name: "双玉のみ",
+      problem: buildProblemDocument(doubleKingBaseSfen, 1, []),
+    },
+  ];
+}
 
 function editablePositionFromBaseSfen(sfen: string): Position {
   const position = decodeSfen(sfen);
@@ -118,27 +136,47 @@ function loadSavedVariableProblems(): SavedVariableProblem[] {
   try {
     const raw = localStorage.getItem(savedPositionsKey);
     if (!raw) {
-      return [];
+      return defaultSavedVariableProblems();
     }
     const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      (parsed as Record<string, unknown>).version === 1
+    ) {
+      return validSavedVariableProblems(
+        (parsed as Record<string, unknown>).positions,
+      ).slice(0, maxSavedPositions);
     }
-    return parsed
-      .filter((entry): entry is SavedVariableProblem => {
-        if (!entry || typeof entry !== "object") {
-          return false;
-        }
-        const candidate = entry as Record<string, unknown>;
-        return (
-          typeof candidate.name === "string" &&
-          isProblemDocument(candidate.problem)
-        );
-      })
-      .slice(0, maxSavedPositions);
+
+    // 旧形式（配列）から移行する際だけ、デフォルト2局面を補う。
+    const legacy = validSavedVariableProblems(parsed);
+    const legacyNames = new Set(legacy.map((position) => position.name));
+    return [
+      ...defaultSavedVariableProblems().filter(
+        (position) => !legacyNames.has(position.name),
+      ),
+      ...legacy,
+    ].slice(0, maxSavedPositions);
   } catch {
+    return defaultSavedVariableProblems();
+  }
+}
+
+function validSavedVariableProblems(value: unknown): SavedVariableProblem[] {
+  if (!Array.isArray(value)) {
     return [];
   }
+  return value.filter((entry): entry is SavedVariableProblem => {
+    if (!entry || typeof entry !== "object") {
+      return false;
+    }
+    const candidate = entry as Record<string, unknown>;
+    return (
+      typeof candidate.name === "string" &&
+      isProblemDocument(candidate.problem)
+    );
+  });
 }
 
 const initialProblem = buildProblemJson(initialBaseSfen, 1, initialVariables);
@@ -170,7 +208,11 @@ export function VariableSolver() {
   useEffect(() => setSfenInput(baseSfen), [baseSfen]);
   useEffect(() => {
     try {
-      localStorage.setItem(savedPositionsKey, JSON.stringify(savedPositions));
+      const store: SavedVariableProblemStore = {
+        version: 1,
+        positions: savedPositions,
+      };
+      localStorage.setItem(savedPositionsKey, JSON.stringify(store));
     } catch {
       // 保存容量不足などの場合も、盤面編集と検討は継続できるようにする。
     }
@@ -287,16 +329,6 @@ export function VariableSolver() {
     }
   };
 
-  const resetBoard = (sfen: string) => {
-    dispatch({
-      ty: "set-position",
-      position: editablePositionFromBaseSfen(sfen),
-    });
-    setVariables([]);
-    setSelectedId(0);
-    clearResult();
-  };
-
   const applyProblemToForm = (problem: ProblemDocument) => {
     dispatch({
       ty: "set-position",
@@ -400,25 +432,6 @@ export function VariableSolver() {
                   </Button>
                 </div>
               </Form.Group>
-              <div className="d-flex align-items-center gap-2 mb-3">
-                <div className="small fw-bold">盤面をリセット</div>
-                <ButtonGroup aria-label="盤面をリセット">
-                  <Button
-                    size="sm"
-                    variant="outline-secondary"
-                    onClick={() => resetBoard(singleKingBaseSfen)}
-                  >
-                    単玉
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline-secondary"
-                    onClick={() => resetBoard(doubleKingBaseSfen)}
-                  >
-                    双玉
-                  </Button>
-                </ButtonGroup>
-              </div>
               <VariablePositionEditor
                 position={editorState.position}
                 normalSelected={editorState.selected}
