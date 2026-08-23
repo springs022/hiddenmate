@@ -317,40 +317,41 @@ export function VariableSolver() {
                 <Form.Label>通常駒のbase SFEN</Form.Label>
                 <div className="d-flex gap-2">
                   <Form.Control
+                    className="variable-sfen-input"
+                    size="sm"
                     value={sfenInput}
                     onChange={(event) => setSfenInput(event.target.value)}
                     spellCheck={false}
                   />
-                  <Button variant="outline-secondary" onClick={loadSfen}>
+                  <Button
+                    className="text-nowrap"
+                    size="sm"
+                    variant="outline-secondary"
+                    onClick={loadSfen}
+                  >
                     読込
                   </Button>
                 </div>
               </Form.Group>
-              <div className="mb-3">
-                <div className="small fw-bold mb-1">盤面をリセット</div>
+              <div className="d-flex align-items-center gap-2 mb-3">
+                <div className="small fw-bold">盤面をリセット</div>
                 <ButtonGroup aria-label="盤面をリセット">
                   <Button
                     size="sm"
                     variant="outline-secondary"
                     onClick={() => resetBoard(singleKingBaseSfen)}
                   >
-                    単玉のみ
+                    単玉
                   </Button>
                   <Button
                     size="sm"
                     variant="outline-secondary"
                     onClick={() => resetBoard(doubleKingBaseSfen)}
                   >
-                    双玉のみ
+                    双玉
                   </Button>
                 </ButtonGroup>
-                <Form.Text className="d-block">
-                  通常駒と覆面駒を初期化します。
-                </Form.Text>
               </div>
-              <Form.Text className="d-block mb-3">
-                通常駒は盤面・駒台をクリックして移動できます。覆面駒は右の一覧で選び、盤面の空きマスまたは駒台をクリックして移動します。
-              </Form.Text>
               <VariablePositionEditor
                 position={editorState.position}
                 normalSelected={editorState.selected}
@@ -369,6 +370,12 @@ export function VariableSolver() {
                 setSelectedId={setSelectedId}
                 removeVariable={removeVariable}
                 addVariableToHand={addVariableToHand}
+                plies={plies}
+                setPlies={setPlies}
+                maxSolutions={maxSolutions}
+                setMaxSolutions={setMaxSolutions}
+                solving={solving}
+                onSolve={solve}
               />
             </Col>
           </Row>
@@ -393,38 +400,16 @@ export function VariableSolver() {
           </div>
         )}
 
-        <div className="d-flex align-items-end gap-3 my-3">
-          {inputMode === "form" && (
-            <Form.Group className="variable-plies" controlId="variable-plies">
-              <Form.Label>手数</Form.Label>
-              <Form.Control
-                type="number"
-                min={1}
-                value={plies}
-                onChange={(event) =>
-                  setPlies(Math.max(1, Number(event.target.value) || 1))
-                }
-                disabled={solving}
-              />
-            </Form.Group>
-          )}
-          <Form.Group controlId="variable-max-solutions">
-            <Form.Label>最大解数</Form.Label>
-            <Form.Control
-              type="number"
-              min={1}
-              max={10000}
-              value={maxSolutions}
-              onChange={(event) =>
-                setMaxSolutions(Math.max(1, Number(event.target.value) || 1))
-              }
-              disabled={solving}
+        {inputMode === "json" && (
+          <div className="my-3">
+            <VariableSolveControls
+              maxSolutions={maxSolutions}
+              setMaxSolutions={setMaxSolutions}
+              solving={solving}
+              onSolve={solve}
             />
-          </Form.Group>
-          <Button onClick={solve} disabled={solving}>
-            {solving ? "検討中…" : "覆面駒を検討"}
-          </Button>
-        </div>
+          </div>
+        )}
 
         {error && <Alert variant="danger">{error}</Alert>}
         {response && <VariableResult response={response} />}
@@ -619,27 +604,42 @@ function VariableControls(props: {
   setSelectedId: (id: number) => void;
   removeVariable: (id: number) => void;
   addVariableToHand: (color: Color) => void;
+  plies: number;
+  setPlies: (plies: number) => void;
+  maxSolutions: number;
+  setMaxSolutions: (maxSolutions: number) => void;
+  solving: boolean;
+  onSolve: () => void;
 }) {
   return (
     <div className="variable-control-panel border rounded p-3">
       <h3 className="h6">覆面駒の新規追加</h3>
-      <p className="small text-muted mb-2">
-        追加時は攻方または受方の駒台に置かれます。
-      </p>
-      <div className="d-grid gap-2 mb-3">
+      <div className="variable-add-buttons d-flex gap-2 mb-3">
         <Button
+          className="flex-fill text-nowrap"
+          size="sm"
           variant="outline-primary"
           onClick={() => props.addVariableToHand("black")}
         >
-          ＋ 攻方駒台に覆面駒を追加（▲）
+          攻方持駒に追加（▲）
         </Button>
         <Button
+          className="flex-fill text-nowrap"
+          size="sm"
           variant="outline-secondary"
           onClick={() => props.addVariableToHand("white")}
         >
-          ＋ 受方駒台に覆面駒を追加（△）
+          受方持駒に追加（△）
         </Button>
       </div>
+      <VariableSolveControls
+        plies={props.plies}
+        setPlies={props.setPlies}
+        maxSolutions={props.maxSolutions}
+        setMaxSolutions={props.setMaxSolutions}
+        solving={props.solving}
+        onSolve={props.onSolve}
+      />
       <h3 className="h6">覆面駒一覧</h3>
       <p className="small text-muted mb-2">
         選択後、移動先の盤面または駒台をクリックします。
@@ -679,6 +679,63 @@ function VariableControls(props: {
           覆面駒はまだありません。
         </Alert>
       )}
+    </div>
+  );
+}
+
+function VariableSolveControls(props: {
+  plies?: number;
+  setPlies?: (plies: number) => void;
+  maxSolutions: number;
+  setMaxSolutions: (maxSolutions: number) => void;
+  solving: boolean;
+  onSolve: () => void;
+}) {
+  return (
+    <div className="variable-solve-controls d-flex align-items-end gap-2 mb-3">
+      {props.plies !== undefined && props.setPlies && (
+        <Form.Group
+          className="variable-control-number"
+          controlId="variable-plies"
+        >
+          <Form.Label>手数</Form.Label>
+          <Form.Control
+            size="sm"
+            type="number"
+            min={1}
+            value={props.plies}
+            onChange={(event) =>
+              props.setPlies!(Math.max(1, Number(event.target.value) || 1))
+            }
+            disabled={props.solving}
+          />
+        </Form.Group>
+      )}
+      <Form.Group
+        className="variable-control-number"
+        controlId="variable-max-solutions"
+      >
+        <Form.Label>最大解数</Form.Label>
+        <Form.Control
+          size="sm"
+          type="number"
+          min={1}
+          max={10000}
+          value={props.maxSolutions}
+          onChange={(event) =>
+            props.setMaxSolutions(Math.max(1, Number(event.target.value) || 1))
+          }
+          disabled={props.solving}
+        />
+      </Form.Group>
+      <Button
+        className="text-nowrap"
+        size="sm"
+        onClick={props.onSolve}
+        disabled={props.solving}
+      >
+        {props.solving ? "検討中…" : "覆面駒を検討"}
+      </Button>
     </div>
   );
 }

@@ -32,10 +32,10 @@ fn format_observed_japanese(state: &HiddenState, observed: ObservedMove) -> Stri
                 .1;
             format!(
                 "{}{}{}({})",
-                square_label(source),
+                square_label(destination),
                 japanese_kind(kind),
                 if promote { "成" } else { "" },
-                square_label(destination)
+                square_label(source)
             )
         }
         ObservedMove::Move {
@@ -177,14 +177,24 @@ mod tests {
 
     #[test]
     fn formats_known_move_and_drop_in_japanese() {
-        let state = state_with_variable(Color::BLACK);
+        let state = VariableProblem {
+            base_sfen: "9/1S7/9/9/9/9/9/9/k8 b - 1".to_string(),
+            variables: vec![VariableSpec {
+                id: VariableId(1),
+                color: Color::BLACK,
+                location: VariableLocation::Board(Square::S64),
+                candidates: vec![Kind::Rook],
+            }],
+        }
+        .enumerate()
+        .unwrap();
         assert_eq!(
             format_observed_japanese(
                 &state,
                 ObservedMove::Move {
                     identity: MoveIdentity::Known,
-                    source: Square::S83,
-                    destination: Square::S82,
+                    source: Square::S82,
+                    destination: Square::S83,
                     promote: false,
                 }
             ),

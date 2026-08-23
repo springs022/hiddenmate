@@ -22,8 +22,18 @@ code {
   max-width: 32rem;
 }
 
-.variable-plies {
-  max-width: 8rem;
+.variable-sfen-input {
+  padding-top: 0.2rem;
+  padding-bottom: 0.2rem;
+}
+
+.variable-control-number {
+  flex: 0 0 6.5rem;
+  width: 6.5rem;
+}
+
+.variable-solve-controls {
+  flex-wrap: nowrap;
 }
 
 .variable-board-wrap {
