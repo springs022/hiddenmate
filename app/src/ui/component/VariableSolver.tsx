@@ -370,13 +370,19 @@ export function VariableSolver() {
                 setSelectedId={setSelectedId}
                 removeVariable={removeVariable}
                 addVariableToHand={addVariableToHand}
-                plies={plies}
-                setPlies={setPlies}
-                maxSolutions={maxSolutions}
-                setMaxSolutions={setMaxSolutions}
-                solving={solving}
-                onSolve={solve}
               />
+              <div className="mt-3">
+                <VariableSolveControls
+                  plies={plies}
+                  setPlies={setPlies}
+                  maxSolutions={maxSolutions}
+                  setMaxSolutions={setMaxSolutions}
+                  solving={solving}
+                  onSolve={solve}
+                />
+                {error && <Alert variant="danger">{error}</Alert>}
+                {response && <VariableResult response={response} />}
+              </div>
             </Col>
           </Row>
         ) : (
@@ -408,11 +414,10 @@ export function VariableSolver() {
               solving={solving}
               onSolve={solve}
             />
+            {error && <Alert variant="danger">{error}</Alert>}
+            {response && <VariableResult response={response} />}
           </div>
         )}
-
-        {error && <Alert variant="danger">{error}</Alert>}
-        {response && <VariableResult response={response} />}
       </Card.Body>
     </Card>
   );
@@ -447,7 +452,7 @@ function VariablePositionEditor(props: {
     color: Color,
     kind: Parameters<typeof Hands>[0]["selected"],
   ) => {
-    if (props.selected && kind === undefined) {
+    if (props.selected) {
       props.moveSelectedToHand(color);
       return;
     }
@@ -462,7 +467,7 @@ function VariablePositionEditor(props: {
         selectedKind={selectedHand("white")}
         variables={props.variables}
         onKnownClick={(kind) => clickHand("white", kind)}
-        onVariableDestination={() => props.moveSelectedToHand("white")}
+        onHandClick={() => clickHand("white", undefined)}
         variableSelected={props.selected !== undefined}
       />
       <CoordinateBoard
@@ -479,7 +484,7 @@ function VariablePositionEditor(props: {
         selectedKind={selectedHand("black")}
         variables={props.variables}
         onKnownClick={(kind) => clickHand("black", kind)}
-        onVariableDestination={() => props.moveSelectedToHand("black")}
+        onHandClick={() => clickHand("black", undefined)}
         variableSelected={props.selected !== undefined}
       />
     </div>
@@ -492,7 +497,7 @@ function VariableHand(props: {
   selectedKind: Parameters<typeof Hands>[0]["selected"];
   variables: VariableDraft[];
   onKnownClick: Parameters<typeof Hands>[0]["onClick"];
-  onVariableDestination: () => void;
+  onHandClick: () => void;
   variableSelected: boolean;
 }) {
   const symbol = props.color === "black" ? "▲" : "△";
@@ -506,7 +511,7 @@ function VariableHand(props: {
       className={`variable-hand variable-hand-${props.color}${
         props.variableSelected ? " variable-hand-drop-target" : ""
       }`}
-      onClick={props.onVariableDestination}
+      onClick={props.onHandClick}
       title={
         props.variableSelected ? `選択中の覆面駒を${label}へ移動` : undefined
       }
@@ -604,12 +609,6 @@ function VariableControls(props: {
   setSelectedId: (id: number) => void;
   removeVariable: (id: number) => void;
   addVariableToHand: (color: Color) => void;
-  plies: number;
-  setPlies: (plies: number) => void;
-  maxSolutions: number;
-  setMaxSolutions: (maxSolutions: number) => void;
-  solving: boolean;
-  onSolve: () => void;
 }) {
   return (
     <div className="variable-control-panel border rounded p-3">
@@ -632,14 +631,6 @@ function VariableControls(props: {
           受方持駒に追加（△）
         </Button>
       </div>
-      <VariableSolveControls
-        plies={props.plies}
-        setPlies={props.setPlies}
-        maxSolutions={props.maxSolutions}
-        setMaxSolutions={props.setMaxSolutions}
-        solving={props.solving}
-        onSolve={props.onSolve}
-      />
       <h3 className="h6">覆面駒一覧</h3>
       <p className="small text-muted mb-2">
         選択後、移動先の盤面または駒台をクリックします。

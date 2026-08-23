@@ -109,12 +109,9 @@ code {
   border-radius: 0.25rem;
 }
 
-.variable-hand-white {
-  background: #f3effd;
-}
-
+.variable-hand-white,
 .variable-hand-black {
-  background: #eef5ff;
+  background: #f3f4f6;
 }
 
 .variable-hand-drop-target {

@@ -71,7 +71,9 @@ function Kind(props: {
   return (
     <span
       className={props.pieceBox ? "text-secondary" : ""}
-      style={{ backgroundColor: props.selected ? SELECTED_COLOR : "white" }}
+      style={{
+        backgroundColor: props.selected ? SELECTED_COLOR : "transparent",
+      }}
     >
       {letter}
     </span>
