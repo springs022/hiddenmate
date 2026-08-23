@@ -24,9 +24,7 @@ import Board from "./Board";
 import Hands from "./Hands";
 
 type InputMode = "form" | "json";
-type VariableLocation =
-  | { type: "board"; square: string }
-  | { type: "hand" };
+type VariableLocation = { type: "board"; square: string } | { type: "hand" };
 
 interface VariableDraft {
   id: number;
@@ -84,7 +82,7 @@ function baseSfenFromPosition(position: Position): string {
 function buildProblemJson(
   baseSfen: string,
   plies: number,
-  variables: VariableDraft[]
+  variables: VariableDraft[],
 ): string {
   return JSON.stringify(
     {
@@ -99,7 +97,7 @@ function buildProblemJson(
       })),
     },
     null,
-    2
+    2,
   );
 }
 
@@ -142,11 +140,9 @@ export function VariableSolver() {
   };
 
   const addVariableToHand = (color: Color) => {
-    const id = variables.reduce((max, variable) => Math.max(max, variable.id), 0) + 1;
-    setVariables([
-      ...variables,
-      { id, color, location: { type: "hand" } },
-    ]);
+    const id =
+      variables.reduce((max, variable) => Math.max(max, variable.id), 0) + 1;
+    setVariables([...variables, { id, color, location: { type: "hand" } }]);
     setSelectedId(id);
     clearResult();
   };
@@ -163,8 +159,8 @@ export function VariableSolver() {
   const updateSelected = (change: Partial<VariableDraft>) => {
     setVariables(
       variables.map((variable) =>
-        variable.id === selectedId ? { ...variable, ...change } : variable
-      )
+        variable.id === selectedId ? { ...variable, ...change } : variable,
+      ),
     );
     clearResult();
   };
@@ -173,7 +169,7 @@ export function VariableSolver() {
     variables.find(
       (variable) =>
         variable.location.type === "board" &&
-        variable.location.square === square
+        variable.location.square === square,
     );
 
   const clickBoard = ([row, col]: [number, number]) => {
@@ -209,7 +205,10 @@ export function VariableSolver() {
     clearResult();
   };
 
-  const clickKnownHand = (color: Color, kind: Parameters<typeof Hands>[0]["selected"]) => {
+  const clickKnownHand = (
+    color: Color,
+    kind: Parameters<typeof Hands>[0]["selected"],
+  ) => {
     setSelectedId(0);
     dispatch({
       ty: "click-hand",
@@ -268,7 +267,7 @@ export function VariableSolver() {
       }
       const json = solve_variable_problem(
         inputMode === "form" ? generatedProblem : manualProblem,
-        maxSolutions
+        maxSolutions,
       );
       setResponse(JSON.parse(json) as VariableSolveResponse);
     } catch (reason) {
@@ -323,16 +322,16 @@ export function VariableSolver() {
                 normalSelected={editorState.selected}
                 variables={variables}
                 selected={selected}
-                setSelectedId={setSelectedId}
                 clickBoard={clickBoard}
                 rightClickBoard={rightClickBoard}
                 clickKnownHand={clickKnownHand}
-                moveSelectedToHand={moveSelectedToHand}
-                addVariableToHand={addVariableToHand}
               />
             </Col>
             <Col xl={5}>
-              <Form.Group className="mb-3 variable-plies" controlId="variable-plies">
+              <Form.Group
+                className="mb-3 variable-plies"
+                controlId="variable-plies"
+              >
                 <Form.Label>手数</Form.Label>
                 <Form.Control
                   type="number"
@@ -349,6 +348,8 @@ export function VariableSolver() {
                 setSelectedId={setSelectedId}
                 updateSelected={updateSelected}
                 removeVariable={removeVariable}
+                addVariableToHand={addVariableToHand}
+                moveSelectedToHand={moveSelectedToHand}
               />
             </Col>
           </Row>
@@ -404,26 +405,24 @@ function VariablePositionEditor(props: {
   normalSelected: ReturnType<typeof newState>["selected"];
   variables: VariableDraft[];
   selected?: VariableDraft;
-  setSelectedId: (id: number) => void;
   clickBoard: (position: [number, number]) => void;
   rightClickBoard: (position: [number, number]) => void;
   clickKnownHand: (
     color: Color,
-    kind: Parameters<typeof Hands>[0]["selected"]
+    kind: Parameters<typeof Hands>[0]["selected"],
   ) => void;
-  moveSelectedToHand: (color: Color) => void;
-  addVariableToHand: (color: Color) => void;
 }) {
-  const boardSelected = props.selected?.location.type === "board"
-    ? squareToPosition(props.selected.location.square)
-    : props.normalSelected.shown && props.normalSelected.ty === "board"
-    ? props.normalSelected.pos
-    : undefined;
+  const boardSelected =
+    props.selected?.location.type === "board"
+      ? squareToPosition(props.selected.location.square)
+      : props.normalSelected.shown && props.normalSelected.ty === "board"
+        ? props.normalSelected.pos
+        : undefined;
   const selectedHand = (color: Color) =>
     props.normalSelected.shown &&
     props.normalSelected.ty === "hand" &&
     props.normalSelected.color === color
-      ? props.normalSelected.kind ?? ""
+      ? (props.normalSelected.kind ?? "")
       : undefined;
 
   return (
@@ -433,11 +432,7 @@ function VariablePositionEditor(props: {
         hands={props.position.hands.white}
         selectedKind={selectedHand("white")}
         variables={props.variables}
-        selectedId={props.selected?.id}
         onKnownClick={(kind) => props.clickKnownHand("white", kind)}
-        onVariableClick={props.setSelectedId}
-        onMoveSelected={() => props.moveSelectedToHand("white")}
-        onAdd={() => props.addVariableToHand("white")}
       />
       <CoordinateBoard
         position={props.position}
@@ -452,11 +447,7 @@ function VariablePositionEditor(props: {
         hands={props.position.hands.black}
         selectedKind={selectedHand("black")}
         variables={props.variables}
-        selectedId={props.selected?.id}
         onKnownClick={(kind) => props.clickKnownHand("black", kind)}
-        onVariableClick={props.setSelectedId}
-        onMoveSelected={() => props.moveSelectedToHand("black")}
-        onAdd={() => props.addVariableToHand("black")}
       />
     </div>
   );
@@ -467,17 +458,13 @@ function VariableHand(props: {
   hands: Position["hands"][Color];
   selectedKind: Parameters<typeof Hands>[0]["selected"];
   variables: VariableDraft[];
-  selectedId?: number;
   onKnownClick: Parameters<typeof Hands>[0]["onClick"];
-  onVariableClick: (id: number) => void;
-  onMoveSelected: () => void;
-  onAdd: () => void;
 }) {
   const symbol = props.color === "black" ? "▲" : "△";
   const label = props.color === "black" ? "攻方駒台" : "受方駒台（自動補完）";
   const variables = props.variables.filter(
     (variable) =>
-      variable.color === props.color && variable.location.type === "hand"
+      variable.color === props.color && variable.location.type === "hand",
   );
   return (
     <div className={`variable-hand variable-hand-${props.color}`}>
@@ -487,28 +474,18 @@ function VariableHand(props: {
         selected={props.selectedKind}
         onClick={props.onKnownClick}
       />
-      <div className="d-flex flex-wrap align-items-center gap-2 mt-1">
-        {variables.map((variable) => (
-          <Button
-            key={variable.id}
-            size="sm"
-            variant={
-              props.selectedId === variable.id ? "primary" : "outline-primary"
-            }
-            onClick={() => props.onVariableClick(variable.id)}
-          >
-            {symbol}V{variable.id}
-          </Button>
-        ))}
-        <Button size="sm" variant="outline-success" onClick={props.onAdd}>
-          ＋{symbol}覆面駒
-        </Button>
-        {props.selectedId !== undefined && (
-          <Button size="sm" variant="outline-secondary" onClick={props.onMoveSelected}>
-            選択中の覆面駒をここへ
-          </Button>
-        )}
-      </div>
+      {variables.length > 0 && (
+        <div className="d-flex flex-wrap align-items-center gap-2 mt-1">
+          {variables.map((variable) => (
+            <span
+              key={variable.id}
+              className={`badge variable-hand-piece variable-hand-piece-${props.color}`}
+            >
+              {symbol}V{variable.id}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -540,7 +517,7 @@ function CoordinateBoard(props: {
               const variable = props.variables.find(
                 (candidate) =>
                   candidate.location.type === "board" &&
-                  candidate.location.square === square
+                  candidate.location.square === square,
               );
               return variable ? (
                 <div
@@ -562,7 +539,7 @@ function CoordinateBoard(props: {
               const variable = props.variables.find(
                 (candidate) =>
                   candidate.location.type === "board" &&
-                  candidate.location.square === square
+                  candidate.location.square === square,
               );
               return variable ? `${square} V${variable.id}` : square;
             }}
@@ -584,9 +561,30 @@ function VariableSettings(props: {
   setSelectedId: (id: number) => void;
   updateSelected: (change: Partial<VariableDraft>) => void;
   removeVariable: (id: number) => void;
+  addVariableToHand: (color: Color) => void;
+  moveSelectedToHand: (color: Color) => void;
 }) {
   return (
-    <div>
+    <div className="variable-control-panel border rounded p-3">
+      <h3 className="h6">覆面駒の追加・設定</h3>
+      <p className="small text-muted mb-2">
+        追加時は攻方または受方の駒台に置かれます。
+      </p>
+      <div className="d-grid gap-2 mb-3">
+        <Button
+          variant="outline-primary"
+          onClick={() => props.addVariableToHand("black")}
+        >
+          ＋ 攻方駒台に覆面駒を追加（▲）
+        </Button>
+        <Button
+          variant="outline-secondary"
+          onClick={() => props.addVariableToHand("white")}
+        >
+          ＋ 受方駒台に覆面駒を追加（△）
+        </Button>
+      </div>
+      <div className="small fw-bold mb-2">覆面駒一覧</div>
       <div className="d-flex flex-wrap gap-2 mb-3">
         {props.variables.map((variable) => (
           <Button
@@ -605,7 +603,8 @@ function VariableSettings(props: {
         <div className="variable-settings border rounded p-3">
           <div className="d-flex justify-content-between align-items-center mb-3">
             <h3 className="h6 mb-0">
-              V{props.selected.id}の設定（{locationLabel(props.selected.location)}）
+              V{props.selected.id}の設定（
+              {locationLabel(props.selected.location)}）
             </h3>
             <Button
               size="sm"
@@ -615,6 +614,28 @@ function VariableSettings(props: {
               削除
             </Button>
           </div>
+          <fieldset>
+            <legend className="form-label fs-6">配置</legend>
+            <div className="d-grid gap-2 mb-3">
+              <Button
+                size="sm"
+                variant="outline-primary"
+                onClick={() => props.moveSelectedToHand("black")}
+              >
+                攻方駒台へ移動（▲）
+              </Button>
+              <Button
+                size="sm"
+                variant="outline-secondary"
+                onClick={() => props.moveSelectedToHand("white")}
+              >
+                受方駒台へ移動（△）
+              </Button>
+            </div>
+            <p className="small text-muted">
+              盤上へ置く場合は、選択したまま盤面の空きマスをクリックします。
+            </p>
+          </fieldset>
           <fieldset>
             <legend className="form-label fs-6">所属</legend>
             <Form.Check
@@ -639,7 +660,9 @@ function VariableSettings(props: {
           </p>
         </div>
       ) : (
-        <Alert variant="info">駒台の「＋覆面駒」で追加してください。</Alert>
+        <Alert variant="info" className="mb-0">
+          上のボタンから覆面駒を追加してください。
+        </Alert>
       )}
     </div>
   );
@@ -649,7 +672,8 @@ function VariableResult(props: { response: VariableSolveResponse }) {
   return (
     <div aria-live="polite">
       <p>
-        初形候補世界: <strong>{props.response.worldCount}</strong> ／ 解数: <strong>{props.response.solutions.length}</strong>
+        初形候補世界: <strong>{props.response.worldCount}</strong> ／ 解数:{" "}
+        <strong>{props.response.solutions.length}</strong>
       </p>
       <Table bordered size="sm" className="variable-result-table">
         <thead>
@@ -685,7 +709,11 @@ function VariableResult(props: { response: VariableSolveResponse }) {
 
 function problemVariableToDraft(variable: ProblemVariable): VariableDraft {
   if (variable.inHand) {
-    return { id: variable.id, color: variable.color, location: { type: "hand" } };
+    return {
+      id: variable.id,
+      color: variable.color,
+      location: { type: "hand" },
+    };
   }
   if (variable.square) {
     return {
