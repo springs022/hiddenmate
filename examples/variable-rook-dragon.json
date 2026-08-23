@@ -1,0 +1,12 @@
+{
+  "baseSfen": "9/9/kS7/N8/1L7/9/9/9/9 b - 1",
+  "plies": 1,
+  "variables": [
+    {
+      "id": 1,
+      "color": "black",
+      "square": "64",
+      "candidates": ["R", "+R"]
+    }
+  ]
+}

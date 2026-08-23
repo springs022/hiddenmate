@@ -3,8 +3,8 @@
 このファイルは、AIエージェント（LLM）がこのリポジトリ（fmrs）を理解し、開発や修正を支援するためのコンテキストとガイドラインを提供するものです。
 
 ## 1. プロジェクト概要
-**プロジェクト名**: fmrs (Shogi Helpmate Solver)
-**目的**: 将棋の「協力詰（ばか詰）」専用の高速なソルバー。
+**プロジェクト名**: HiddenMate
+**目的**: 覆面駒（Variable）・透明駒（Invisible）入りの協力詰を検討するソルバー。fmrsを基盤とする。
 **特徴**: 
 - ブラウザ上（WebAssembly経由）で完全に動作するためサーバサイドが存在しない。
 - 非常に長手数の問題（例：寿限無 19447手）を数秒で解くパフォーマンスを誇る。
@@ -18,6 +18,8 @@
   - **`rust/fmrs_core/`**: 協力詰ソルバーのコアロジック（局面表現、SFENのエンコード/デコード、合法手生成、探索アルゴリズムなど）。
   - **`rust/src/`**: CLIツールとしてのエントリポイントやコマンド定義（`main.rs`, `command/`など）。特に `command/one_way_mate/` には一本道詰将棋の自動生成アルゴリズム（ビームサーチ等）が実装されている。
   - **`rust/wasm/`**: ブラウザ上で実行するためのWebAssemblyバインディング (`wasm-bindgen`を利用)。
+  - **`rust/hiddenmate_core/`**: 覆面駒の候補世界、観測着手、推論、協力探索。
+  - **`rust/hiddenmate_cli/`**: HiddenMate問題JSONを解くCLI。
 - **`app/`**: Webフロントエンドのコード（TypeScript + React）。
   - `app/src/`: Reactコンポーネント群、Wasmとのインターフェース、状態管理。
   - Webpack（`@wasm-tool/wasm-pack-plugin`）を使用してWasmビルドとフロントエンドビルドを統合している。

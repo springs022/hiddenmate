@@ -6,7 +6,7 @@ import { KINDS } from "../../model";
 import { PRESET_PROBLEMS } from "../../problem";
 import { positionPieceBox } from "../../model/position";
 
-const SAVED_POSITIONS_KEY = "fmrs_saved_positions";
+const SAVED_POSITIONS_KEY = "hiddenmate_saved_positions";
 const MAX_SAVED_POSITIONS = 20;
 
 export function presetProblems(): Array<types.Problem> {

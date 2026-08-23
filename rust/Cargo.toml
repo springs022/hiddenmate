@@ -18,7 +18,7 @@ name = "fmrs"
 bench = false
 
 [workspace]
-members = ["wasm", "fmrs_core"]
+members = ["wasm", "fmrs_core", "hiddenmate_core", "hiddenmate_cli"]
 
 [dependencies]
 fmrs_core = { path = "./fmrs_core" }

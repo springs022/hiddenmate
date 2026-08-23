@@ -1,0 +1,15 @@
+[package]
+name = "hiddenmate_cli"
+version = "0.1.0"
+edition = "2021"
+description = "Command-line solver for HiddenMate"
+license = "MIT"
+
+[[bin]]
+name = "hiddenmate"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "*"
+clap = { version = "*", features = ["derive"] }
+hiddenmate_core = { path = "../hiddenmate_core" }

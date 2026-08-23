@@ -5,7 +5,7 @@ const webpack = require("webpack");
 
 module.exports = (env, argv) => {
   const isProd = argv && argv.mode === "production";
-  const basePath = isProd ? "/fmrs/" : "/";
+  const basePath = isProd ? "/hiddenmate/" : "/";
   return {
     entry: "./app/src/index.tsx",
     output: {

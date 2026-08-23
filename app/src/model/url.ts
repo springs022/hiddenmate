@@ -7,7 +7,7 @@ function basePath(): string {
   return "/";
 }
 
-// 作品の恒久リンク。/fmrs/<名前> で該当局面を開く。
+// 作品の恒久リンク。/hiddenmate/<名前> で該当局面を開く。
 // 読み込み後、URL は通常の SFEN 形式に置き換わる。
 const NAMED_POSITIONS: Record<string, string> = {
   noroshi:

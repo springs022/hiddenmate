@@ -1,0 +1,15 @@
+[package]
+name = "hiddenmate_core"
+version = "0.1.0"
+edition = "2021"
+description = "Variable and Invisible piece helpmate solver core for shogi"
+license = "MIT"
+
+[dependencies]
+anyhow = "*"
+fmrs_core = { path = "../fmrs_core" }
+serde = { version = "*", features = ["derive"] }
+serde_json = "*"
+
+[dev-dependencies]
+pretty_assertions = "*"

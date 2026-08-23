@@ -1,6 +1,6 @@
 {
-  "short_name": "Shogi Helpmate Solver",
-  "name": "Shogi Helpmate Solver",
+  "short_name": "HiddenMate",
+  "name": "HiddenMate - Variable and Invisible Piece Helpmate Solver",
   "start_url": ".",
   "display": "standalone",
   "theme_color": "#000000",

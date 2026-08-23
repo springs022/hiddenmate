@@ -1,78 +1,62 @@
-# [Shogi Helpmate Solver](https://ogiekako.github.io/fmrs)
+# HiddenMate
 
-Rustで書かれた、[協力詰]（ばか詰）専用のソルバー
+覆面駒（Variable）と透明駒（Invisible）を扱う、フェアリー協力詰の検討・創作支援ソフトウェアです。
 
-![helpmate solver image](image.png)
+高速な通常協力詰エンジン [fmrs](https://github.com/ogiekako/fmrs) を基盤にしています。確定した通常局面の合法手生成は `fmrs_core` に任せ、HiddenMate は「ここまでの手順と矛盾しない具体局面の集合」を管理します。
 
-[協力詰]: https://ja.wikipedia.org/wiki/%E8%A9%B0%E5%B0%86%E6%A3%8B#%E3%83%95%E3%82%A7%E3%82%A2%E3%83%AA%E3%83%BC%E8%A9%B0%E5%B0%86%E6%A3%8B
+## 現在の実装状況
 
-## 使い方
+最初の覆面駒MVPを実装中です。現在は次に対応しています。
 
-https://ogiekako.github.io/fmrs にアクセスします。
+- 通常将棋14駒種を候補とする、位置・所属既知の覆面駒
+- 複数候補世界の列挙
+- 標準駒数からの受方持駒補完
+- 初形の二歩、行き所、王数、王手状態による候補除外
+- 攻方王手義務・受方応手による候補世界の絞り込み
+- 覆面駒の移動、成、駒取り、持駒化、再打の個体追跡
+- 残る全候補世界に対する証明済み詰み判定
+- 指定手数の協力手順列挙
+- JSON問題形式とCLI
 
-- 左クリックで駒移動、右クリックで成、向きの変更
-- キーボードによる操作も可能。[FM]と同じキー割当を採用しています。
-- Solveボタンを押すと解図がはじまります。
-- 簡易的な作問補助として、「＋」ボタンで現在の局面に名前をつけて保存できます（最大20件、リロード後も保持）。「↺」ボタンでデフォルトに戻せます。
-- URL自体が盤面を表しているため、問題の共有が容易です。
+Web盤面は、基盤の通常協力詰UIを引き継いだ段階です。覆面駒の配置・候補表示UIと透明駒は今後実装します。
 
-[FM]: http://www.dokidoki.ne.jp/home2/takuji/FM.html
+## CLI
 
-## FMとの違い
+Rust環境で次を実行します。
 
-- FMはさまざまなルールをサポートしていますが、本ソルバーは協力詰専用です。
-- 高速な解図が特徴で、例えば[寿限無]19447手を約5秒で解きます。
-- 非標準駒数のサポートはありません。
-- フェアリー駒は、石のみをサポートしています。（FMと同様、Eでおけます）
-
-[寿限無]: https://www.ne.jp/asahi/tetsu/toybox/kato/fbaka4.htm
-
-## 注意
-
-- 公開サイトの既定構成では、計算はブラウザ上の wasm で行われます。（つまりあなたの計算資源を消費します）
-- 必要なら、重い解図だけ Cloud Run 上の API に逃がす構成も取れます。詳細は [CLOUD_RUN.md](CLOUD_RUN.md) を参照してください。
-- 変化紛れが非常に多く、メモリ使用量が4Gを超えるような問題は解くことができません(例: [加藤徹4197手])。コマンドラインによる使用であれば、解ける可能性があります。
-- 二歩があるなど、違法な初形を与えた場合の動作は未定義です。
-
-[加藤徹4197手]: https://www.ne.jp/asahi/tetsu/toybox/kato/fbaka4.htm
-
-## コマンドラインによる使い方
-
-**セットアップ**
-
-```
-git clone https://github.com/ogiekako/fmrs
-cd fmrs/rust
+```console
+cd rust
+cargo run -p hiddenmate_cli -- ../examples/variable-rook-dragon.json
 ```
 
-**実行**
+出力例：
 
-`cargo run -r solve <algo> <sfen>`
-
-- `<algo>` は `standard` か `parallel`
-- `<sfen>` は [SFEN]文字列
-
-**例:**
-
-```
-cargo run -r solve standard '8k/9/9/8N/4b4/9/9/9/9 b RGrb3g4s3n4l18p 1'
+```text
+初形候補世界: 2
+  V1: {Rook, ProRook}
+解数: 1
+1: V1:64-84
 ```
 
-cargoコマンドが存在しない場合は https://rustup.rs からインストールしてください
+問題形式は [design/problem-format.md](design/problem-format.md) を参照してください。
 
-[SFEN]: https://en.wikipedia.org/wiki/Shogi_notation#SFEN
+## 開発
 
----
+```console
+cd rust
+cargo test --workspace --no-fail-fast
+cargo clippy --all-targets --all-features
+```
 
-## Developer info
+Web版：
 
-- Benchmark https://ogiekako.github.io/fmrs/dev/bench/index.html
+```console
+npm install
+npm run serve
+```
 
-### Web
+設計は [design/architecture.md](design/architecture.md)、公開方法は [DEPLOYMENT.md](DEPLOYMENT.md) に記載しています。
 
-Install [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/) and run
-`npm run serve` or `npm run serve -- --port $PORT`
+## ライセンスと由来
 
-### Cloud Run
-
-GitHub Pages から重い解図だけ Cloud Run に逃がす構成をサポートしています。構成と手順は [CLOUD_RUN.md](CLOUD_RUN.md) を参照してください。
+MIT Licenseです。基盤であるfmrsの著作権表示とライセンス条件を引き継ぎます。詳細は [LICENSE](LICENSE) と [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) を参照してください。
