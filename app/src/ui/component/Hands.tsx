@@ -6,6 +6,7 @@ export default function Hands(props: {
   selected: model.Kind | "" | undefined;
   onClick: (kind: model.Kind | undefined) => void;
   pieceBox?: boolean;
+  showNothing?: boolean;
 }) {
   let nothing = true;
   const pieces = [];
@@ -28,26 +29,27 @@ export default function Hands(props: {
             pieceBox={props.pieceBox}
           />
           {n}
-        </span>
+        </span>,
       );
     }
   }
-  const res = nothing ? (
-    <span
-      onClick={(e) => {
-        e.stopPropagation();
-        props.onClick(undefined);
-      }}
-    >
-      <Kind
-        kind={""}
-        selected={props.selected === ""}
-        pieceBox={props.pieceBox}
-      />
-    </span>
-  ) : (
-    <>{pieces}</>
-  );
+  const res =
+    nothing && props.showNothing !== false ? (
+      <span
+        onClick={(e) => {
+          e.stopPropagation();
+          props.onClick(undefined);
+        }}
+      >
+        <Kind
+          kind={""}
+          selected={props.selected === ""}
+          pieceBox={props.pieceBox}
+        />
+      </span>
+    ) : nothing ? null : (
+      <>{pieces}</>
+    );
   return <div style={{ fontSize: "1.5em" }}>{res}</div>;
 }
 

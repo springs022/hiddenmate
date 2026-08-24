@@ -165,6 +165,35 @@ test("rotates a white board variable like a standard white piece", () => {
   ).toBe("rotate(180deg)");
 });
 
+test("reverses a board variable owner by right click or double tap", () => {
+  render(<App />);
+  const variableSquare = screen.getByLabelText("64 V1");
+
+  fireEvent.contextMenu(variableSquare);
+  expect(variableSquare.textContent).toContain("△V1");
+  expect(
+    (variableSquare.firstElementChild as HTMLElement).style.transform,
+  ).toBe("rotate(180deg)");
+
+  fireEvent.touchEnd(variableSquare);
+  fireEvent.touchEnd(variableSquare);
+  expect(variableSquare.textContent).toContain("▲V1");
+  expect(
+    (variableSquare.firstElementChild as HTMLElement).style.transform,
+  ).toBe("rotate(0deg)");
+});
+
+test("does not show nothing when an otherwise empty hand has a variable", () => {
+  const { container } = render(<App />);
+  const attackHand = container.querySelector(".variable-hand-black");
+
+  expect(attackHand?.textContent).toContain("なし");
+  fireEvent.click(screen.getByRole("button", { name: "攻方持駒に追加" }));
+
+  expect(attackHand?.textContent).toContain("▲V2");
+  expect(attackHand?.textContent).not.toContain("なし");
+});
+
 test("treats a board double tap like a right click", () => {
   render(<App />);
   const silverSquare = screen.getByLabelText("83");

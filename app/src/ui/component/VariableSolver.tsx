@@ -306,8 +306,19 @@ export function VariableSolver() {
     const square = `${col + 1}${row + 1}`;
     const existing = variableAt(square);
     if (existing) {
-      setSelectedId(existing.id);
+      setVariables(
+        variables.map((variable) =>
+          variable.id === existing.id
+            ? {
+                ...variable,
+                color: variable.color === "black" ? "white" : "black",
+              }
+            : variable,
+        ),
+      );
+      setSelectedId(0);
       dispatch({ ty: "clear-selection" });
+      clearResult();
       return;
     }
     dispatch({ ty: "right-click-board", pos: [row, col] });
@@ -733,6 +744,7 @@ function VariableHand(props: {
         hands={props.hands}
         selected={props.selectedKind}
         onClick={props.onKnownClick}
+        showNothing={variables.length === 0}
       />
       {variables.length > 0 && (
         <div className="d-flex flex-wrap align-items-center gap-2 mt-1">
