@@ -12,8 +12,8 @@ test("renders HiddenMate title", () => {
   ).not.toBeNull();
   expect(screen.getByRole("button", { name: "盤面・フォーム" })).not.toBeNull();
   expect(screen.getByLabelText("通常駒のbase SFEN")).not.toBeNull();
-  expect(screen.getByText("受方駒台（自動補完）")).not.toBeNull();
-  expect(screen.getByText("攻方駒台")).not.toBeNull();
+  expect(screen.queryByText("受方駒台")).toBeNull();
+  expect(screen.queryByText("攻方駒台")).toBeNull();
   expect(screen.getByRole("button", { name: "単玉のみ" })).not.toBeNull();
   expect(screen.getByRole("button", { name: "双玉のみ" })).not.toBeNull();
   expect(screen.queryByText("盤面をリセット")).toBeNull();
@@ -21,12 +21,8 @@ test("renders HiddenMate title", () => {
     screen.getByRole("heading", { name: "覆面駒の新規追加" }),
   ).not.toBeNull();
   expect(screen.getByRole("heading", { name: "覆面駒一覧" })).not.toBeNull();
-  expect(
-    screen.getByRole("button", { name: "攻方持駒に追加（▲）" }),
-  ).not.toBeNull();
-  expect(
-    screen.getByRole("button", { name: "受方持駒に追加（△）" }),
-  ).not.toBeNull();
+  expect(screen.getByRole("button", { name: "攻方持駒に追加" })).not.toBeNull();
+  expect(screen.getByRole("button", { name: "受方持駒に追加" })).not.toBeNull();
   expect(screen.queryByRole("heading", { name: /V1の設定/ })).toBeNull();
   expect(screen.queryByText("通常駒と覆面駒を初期化します。")).toBeNull();
   expect(
@@ -58,7 +54,7 @@ test("places the editor, variable controls, and solve results in three columns",
 test("moves a selected standard piece by clicking the hand background", () => {
   const { container } = render(<App />);
   const silverSquare = screen.getByLabelText("83");
-  const attackHand = screen.getByText("攻方駒台").closest(".variable-hand");
+  const attackHand = container.querySelector(".variable-hand-black");
 
   expect(silverSquare.textContent).toContain("銀");
   expect(attackHand).not.toBeNull();
@@ -98,7 +94,7 @@ test("loads the default single-king position from saved positions", () => {
 test("keeps a newly added variable unselected", () => {
   const { container } = render(<App />);
 
-  fireEvent.click(screen.getByRole("button", { name: "攻方持駒に追加（▲）" }));
+  fireEvent.click(screen.getByRole("button", { name: "攻方持駒に追加" }));
 
   expect(container.querySelectorAll(".variable-piece-selected")).toHaveLength(
     0,
@@ -111,6 +107,28 @@ test("keeps a newly added variable unselected", () => {
   expect(
     container.querySelectorAll(".variable-hand-piece-selected"),
   ).toHaveLength(1);
+});
+
+test("allows at most six variables and does not highlight a hand", () => {
+  const { container } = render(<App />);
+  const addBlack = screen.getByRole("button", {
+    name: "攻方持駒に追加",
+  });
+  const addWhite = screen.getByRole("button", {
+    name: "受方持駒に追加",
+  });
+
+  for (let i = 0; i < 5; i += 1) {
+    fireEvent.click(addBlack);
+  }
+
+  expect((addBlack as HTMLButtonElement).disabled).toBe(true);
+  expect((addWhite as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getByText("▲V6")).not.toBeNull();
+  expect(screen.queryByText("▲V7")).toBeNull();
+
+  fireEvent.click(screen.getByLabelText("64 V1"));
+  expect(container.querySelector(".variable-hand-drop-target")).toBeNull();
 });
 
 test("toggles a board variable and clears selection after moving it", () => {
@@ -137,7 +155,7 @@ test("toggles a board variable and clears selection after moving it", () => {
 test("rotates a white board variable like a standard white piece", () => {
   render(<App />);
 
-  fireEvent.click(screen.getByRole("button", { name: "受方持駒に追加（△）" }));
+  fireEvent.click(screen.getByRole("button", { name: "受方持駒に追加" }));
   fireEvent.click(screen.getByText("△V2"));
   fireEvent.click(screen.getByLabelText("55"));
 

@@ -8,6 +8,8 @@ use fmrs_core::{
 
 use crate::{ConcreteWorld, HiddenState, VariableId, VariableLocation, VariablePiece};
 
+const MAX_VARIABLES: usize = 6;
+
 /// 初形で位置・所属が判明している覆面駒。
 #[derive(Debug, Clone)]
 pub struct VariableSpec {
@@ -48,6 +50,9 @@ impl VariableProblem {
 }
 
 fn validate_specs(base: &PositionAux, specs: &[VariableSpec]) -> Result<()> {
+    if specs.len() > MAX_VARIABLES {
+        bail!("覆面駒は6枚まで指定できます");
+    }
     let mut ids = BTreeSet::new();
     let mut squares = BTreeSet::new();
     for spec in specs {

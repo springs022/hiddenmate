@@ -78,6 +78,7 @@ const initialVariables: VariableDraft[] = [
 ];
 const savedPositionsKey = "hiddenmate_variable_saved_positions";
 const maxSavedPositions = 20;
+const maxVariables = 6;
 
 function defaultSavedVariableProblems(): SavedVariableProblem[] {
   return [
@@ -243,6 +244,9 @@ export function VariableSolver() {
   };
 
   const addVariableToHand = (color: Color) => {
+    if (variables.length >= maxVariables) {
+      return;
+    }
     const id =
       variables.reduce((max, variable) => Math.max(max, variable.id), 0) + 1;
     setVariables([...variables, { id, color, location: { type: "hand" } }]);
@@ -710,22 +714,21 @@ function VariableHand(props: {
   onVariableClick: (id: number) => void;
 }) {
   const symbol = props.color === "black" ? "▲" : "△";
-  const label = props.color === "black" ? "攻方駒台" : "受方駒台";
+  const destination = props.color === "black" ? "攻方駒台" : "受方駒台";
   const variables = props.variables.filter(
     (variable) =>
       variable.color === props.color && variable.location.type === "hand",
   );
   return (
     <div
-      className={`variable-hand variable-hand-${props.color}${
-        props.variableSelected ? " variable-hand-drop-target" : ""
-      }`}
+      className={`variable-hand variable-hand-${props.color}`}
       onClick={props.onHandClick}
       title={
-        props.variableSelected ? `選択中の覆面駒を${label}へ移動` : undefined
+        props.variableSelected
+          ? `選択中の覆面駒を${destination}へ移動`
+          : undefined
       }
     >
-      <div className="small fw-bold mb-1">{label}</div>
       <Hands
         hands={props.hands}
         selected={props.selectedKind}
@@ -841,6 +844,7 @@ function VariableControls(props: {
           className="flex-fill text-nowrap"
           size="sm"
           variant="outline-primary"
+          disabled={props.variables.length >= maxVariables}
           onClick={() => props.addVariableToHand("black")}
         >
           攻方持駒に追加
@@ -848,7 +852,8 @@ function VariableControls(props: {
         <Button
           className="flex-fill text-nowrap"
           size="sm"
-          variant="outline-secondary"
+          variant="outline-primary"
+          disabled={props.variables.length >= maxVariables}
           onClick={() => props.addVariableToHand("white")}
         >
           受方持駒に追加

@@ -104,9 +104,9 @@ code {
   justify-content: center;
   width: 100%;
   height: 100%;
-  font-size: 0.65em;
+  font-size: 0.8em;
   font-weight: 700;
-  color: #fff;
+  color: #212529;
 }
 
 .variable-owner-mark {
@@ -114,14 +114,6 @@ code {
   top: 0;
   left: 1px;
   font-size: 0.55em;
-}
-
-.variable-piece-black {
-  background: #0d6efd;
-}
-
-.variable-piece-white {
-  background: #6f42c1;
 }
 
 .variable-piece-selected {
@@ -184,26 +176,11 @@ code {
   background: #f3f4f6;
 }
 
-.variable-hand-drop-target {
-  cursor: pointer;
-  box-shadow: inset 0 0 0 2px #ffc107;
-}
-
-.variable-hand-drop-target:hover {
-  box-shadow: inset 0 0 0 3px #ffc107;
-}
-
-.variable-hand-piece {
+.badge.variable-hand-piece {
   padding: 0.35rem 0.5rem;
-  font-size: 0.85rem;
-}
-
-.variable-hand-piece-white {
-  background: #6f42c1;
-}
-
-.variable-hand-piece-black {
-  background: #0d6efd;
+  font-size: 1rem;
+  color: #212529;
+  background-color: transparent;
 }
 
 .variable-hand-piece-selected {

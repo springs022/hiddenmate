@@ -12,6 +12,27 @@ fn square(file: usize, rank: usize) -> Square {
 }
 
 #[test]
+fn rejects_more_than_six_variables() {
+    let variables = (1..=7)
+        .map(|id| VariableSpec {
+            id: VariableId(id),
+            color: Color::BLACK,
+            location: VariableLocation::Hand(Color::BLACK),
+            candidates: vec![Kind::Pawn],
+        })
+        .collect();
+
+    let error = VariableProblem {
+        base_sfen: "9/9/k8/9/9/9/9/9/9 b - 1".to_string(),
+        variables,
+    }
+    .enumerate()
+    .unwrap_err();
+
+    assert!(error.to_string().contains("覆面駒は6枚まで指定できます"));
+}
+
+#[test]
 fn enumerates_candidate_worlds_and_completes_white_hand() {
     let state = VariableProblem {
         base_sfen: "9/9/k8/9/9/9/9/9/9 b - 1".to_string(),
