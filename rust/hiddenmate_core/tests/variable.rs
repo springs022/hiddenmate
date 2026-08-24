@@ -141,8 +141,10 @@ fn solves_one_ply_variable_helpmate() {
         Some(Kind::ProRook)
     );
 
-    // 1手解があるため、同じ初形を3手協力詰としては扱わない。
-    assert!(solve_exact(&state, 3, 10).is_empty());
+    // 3手指定でも、上限以下の1手解を含める。
+    assert!(solve_exact(&state, 3, 10)
+        .iter()
+        .any(|solution| solution.len() == 1));
 }
 
 #[test]
@@ -250,4 +252,63 @@ fn defender_pawn_block_is_not_filtered_as_pawn_drop_mate() {
     };
 
     assert!(state.observed_moves().contains(&pawn_block));
+}
+
+#[test]
+fn includes_valid_three_ply_line_even_when_shorter_mates_exist() {
+    let state = VariableProblem {
+        base_sfen: "9/9/kS7/N8/9/1L7/9/9/9 b - 1".to_string(),
+        variables: vec![VariableSpec {
+            id: VariableId(1),
+            color: Color::BLACK,
+            location: VariableLocation::Board(square(4, 2)),
+            candidates: fmrs_core::piece::KINDS.to_vec(),
+        }],
+    }
+    .enumerate()
+    .unwrap();
+
+    let first = ObservedMove::Move {
+        identity: MoveIdentity::Variable(VariableId(1)),
+        source: square(4, 2),
+        destination: square(7, 5),
+        promote: true,
+    };
+    assert!(state.observed_moves().contains(&first));
+    let after_first = state.apply(first).unwrap();
+    assert_eq!(
+        after_first.resolved_kind(VariableId(1)),
+        Some(Kind::ProBishop)
+    );
+    let second = ObservedMove::Drop {
+        identity: DropIdentity::Known(Kind::Pawn),
+        destination: square(8, 4),
+    };
+    assert!(after_first.observed_moves().contains(&second));
+    let after_second = after_first.apply(second).unwrap();
+    let third = ObservedMove::Move {
+        identity: MoveIdentity::Known,
+        source: square(7, 5),
+        destination: square(8, 4),
+        promote: false,
+    };
+    assert!(after_second.observed_moves().contains(&third));
+    assert!(after_second.apply(third).unwrap().is_proven_mate());
+
+    let shorter = solve_exact(&state, 1, 100)
+        .iter()
+        .map(|solution| format_solution_japanese(&state, solution).join(" "))
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        shorter,
+        vec!["82▲(42)", "82▲成(42)", "92▲(42)", "92▲成(42)"]
+    );
+    let up_to_three = solve_exact(&state, 3, 100)
+        .iter()
+        .map(|solution| format_solution_japanese(&state, solution).join(" "))
+        .collect::<Vec<_>>();
+    assert!(up_to_three
+        .iter()
+        .any(|solution| solution == "75▲成(42) 84歩打 84馬(75)"));
 }

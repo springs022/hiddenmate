@@ -1,10 +1,16 @@
 body {
   margin: 0;
+  overflow-x: hidden;
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
     "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.board-square {
+  width: 32px;
+  height: 36px;
 }
 
 code {
@@ -128,10 +134,49 @@ code {
 }
 
 .variable-hand {
-  min-width: 19rem;
+  width: 19rem;
+  max-width: 100%;
   padding: 0.5rem 0.65rem;
   border: 1px solid #adb5bd;
   border-radius: 0.25rem;
+}
+
+@media (max-width: 575.98px) {
+  .variable-add-buttons {
+    flex-direction: column;
+  }
+
+  .variable-solve-controls {
+    flex-wrap: wrap;
+  }
+
+  .variable-file-labels {
+    grid-template-columns: repeat(9, 28px);
+  }
+
+  .variable-rank-labels {
+    grid-template-rows: repeat(9, 32px);
+  }
+
+  .variable-board-wrap .board-square {
+    width: 28px;
+    height: 32px;
+  }
+}
+
+@media (max-width: 359.98px) {
+  .variable-file-labels {
+    grid-template-columns: repeat(9, 26px);
+  }
+
+  .variable-rank-labels {
+    grid-template-rows: repeat(9, 30px);
+  }
+
+  .variable-board-wrap .board-square {
+    width: 26px;
+    height: 30px;
+  }
 }
 
 .variable-hand-white,
@@ -159,6 +204,10 @@ code {
 
 .variable-hand-piece-black {
   background: #0d6efd;
+}
+
+.variable-hand-piece-selected {
+  box-shadow: 0 0 0 3px #ffc107;
 }
 
 .variable-control-panel {

@@ -68,6 +68,10 @@ export function reduce(orig: types.State, event: types.Event): types.State {
       return handleClick(orig, event);
     case "right-click-board":
       return handleRightClick(orig, event.pos);
+    case "clear-selection":
+      state = cloneState(orig);
+      state.selected.shown = false;
+      return state;
     case "set-position":
       state = cloneState(orig);
       state.position = event.position;

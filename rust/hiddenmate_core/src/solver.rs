@@ -104,7 +104,7 @@ fn japanese_kind(kind: Kind) -> &'static str {
     }
 }
 
-/// 指定手数ちょうどで詰む協力手順を列挙する初期実装。
+/// 指定手数以下で詰む協力手順を、短い順に列挙する。
 ///
 /// 両者は協力するため minimax ではなく、観測着手の存在探索となる。
 /// `max_solutions` に達した時点で打ち切る。
@@ -113,35 +113,24 @@ pub fn solve_exact(initial: &HiddenState, plies: usize, max_solutions: usize) ->
         return Vec::new();
     }
 
-    // 協力詰は最短手数で詰めるルールなので、指定手数より短い解が
-    // 一つでもあれば、その局面の指定手数解は採用しない。
-    for shorter in 0..plies {
-        // 詰み局面は受方手番にしか現れないため、到達不能な偶奇は省略できる。
+    let mut solutions = Vec::new();
+    for depth in 0..=plies {
+        // 詰み局面は受方手番にしか現れないため、到達不能な偶奇は省略する。
         let ends_with_white_turn = if initial.turn().is_black() {
-            shorter % 2 == 1
+            depth % 2 == 1
         } else {
-            shorter % 2 == 0
+            depth % 2 == 0
         };
         if !ends_with_white_turn {
             continue;
         }
-        let mut shorter_solutions = Vec::new();
-        let mut shorter_path = Vec::with_capacity(shorter);
-        solve_inner(
-            initial,
-            shorter,
-            1,
-            &mut shorter_path,
-            &mut shorter_solutions,
-        );
-        if !shorter_solutions.is_empty() {
-            return Vec::new();
+
+        let mut path = Vec::with_capacity(depth);
+        solve_inner(initial, depth, max_solutions, &mut path, &mut solutions);
+        if solutions.len() >= max_solutions {
+            break;
         }
     }
-
-    let mut solutions = Vec::new();
-    let mut path = Vec::with_capacity(plies);
-    solve_inner(initial, plies, max_solutions, &mut path, &mut solutions);
     solutions
 }
 

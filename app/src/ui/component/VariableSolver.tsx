@@ -194,7 +194,7 @@ export function VariableSolver() {
   const [sfenInput, setSfenInput] = useState(initialBaseSfen);
   const [plies, setPlies] = useState(1);
   const [variables, setVariables] = useState<VariableDraft[]>(initialVariables);
-  const [selectedId, setSelectedId] = useState<number>(1);
+  const [selectedId, setSelectedId] = useState<number>(0);
   const [manualProblem, setManualProblem] = useState(initialProblem);
   const [maxSolutions, setMaxSolutions] = useState(100);
   const [response, setResponse] = useState<VariableSolveResponse>();
@@ -226,6 +226,14 @@ export function VariableSolver() {
     setResponse(undefined);
   };
 
+  const selectVariable = (id: number) => {
+    const nextId = id === selectedId ? 0 : id;
+    setSelectedId(nextId);
+    if (nextId !== 0) {
+      dispatch({ ty: "clear-selection" });
+    }
+  };
+
   const selectMode = (mode: InputMode) => {
     if (mode === "json" && inputMode === "form") {
       setManualProblem(generatedProblem);
@@ -238,7 +246,7 @@ export function VariableSolver() {
     const id =
       variables.reduce((max, variable) => Math.max(max, variable.id), 0) + 1;
     setVariables([...variables, { id, color, location: { type: "hand" } }]);
-    setSelectedId(id);
+    setSelectedId(0);
     clearResult();
   };
 
@@ -246,7 +254,7 @@ export function VariableSolver() {
     const next = variables.filter((variable) => variable.id !== id);
     setVariables(next);
     if (selectedId === id) {
-      setSelectedId(next[0]?.id ?? 0);
+      setSelectedId(0);
     }
     clearResult();
   };
@@ -271,7 +279,7 @@ export function VariableSolver() {
     const square = `${col + 1}${row + 1}`;
     const existing = variableAt(square);
     if (existing) {
-      setSelectedId(existing.id);
+      selectVariable(existing.id);
       setError(undefined);
       return;
     }
@@ -283,6 +291,7 @@ export function VariableSolver() {
         return;
       }
       updateSelected({ location: { type: "board", square } });
+      setSelectedId(0);
       return;
     }
     dispatch({ ty: "click-board", pos: [row, col] });
@@ -294,6 +303,7 @@ export function VariableSolver() {
     const existing = variableAt(square);
     if (existing) {
       setSelectedId(existing.id);
+      dispatch({ ty: "clear-selection" });
       return;
     }
     dispatch({ ty: "right-click-board", pos: [row, col] });
@@ -318,6 +328,7 @@ export function VariableSolver() {
       return;
     }
     updateSelected({ color, location: { type: "hand" } });
+    setSelectedId(0);
   };
 
   const loadSfen = () => {
@@ -340,7 +351,7 @@ export function VariableSolver() {
     setPlies(problem.plies);
     const loaded = problem.variables.map(problemVariableToDraft);
     setVariables(loaded);
-    setSelectedId(loaded[0]?.id ?? 0);
+    setSelectedId(0);
     setInputMode("form");
     clearResult();
   };
@@ -445,6 +456,7 @@ export function VariableSolver() {
                   rightClickBoard={rightClickBoard}
                   clickKnownHand={clickKnownHand}
                   moveSelectedToHand={moveSelectedToHand}
+                  selectVariable={selectVariable}
                 />
               </Col>
               <Col xl={4} className="variable-layout-settings">
@@ -459,7 +471,7 @@ export function VariableSolver() {
                 <VariableControls
                   variables={variables}
                   selected={selected}
-                  setSelectedId={setSelectedId}
+                  setSelectedId={selectVariable}
                   removeVariable={removeVariable}
                   addVariableToHand={addVariableToHand}
                 />
@@ -625,6 +637,7 @@ function VariablePositionEditor(props: {
     kind: Parameters<typeof Hands>[0]["selected"],
   ) => void;
   moveSelectedToHand: (color: Color) => void;
+  selectVariable: (id: number) => void;
 }) {
   const boardSelected =
     props.selected?.location.type === "board"
@@ -659,6 +672,8 @@ function VariablePositionEditor(props: {
         onKnownClick={(kind) => clickHand("white", kind)}
         onHandClick={() => clickHand("white", undefined)}
         variableSelected={props.selected !== undefined}
+        selectedId={props.selected?.id}
+        onVariableClick={props.selectVariable}
       />
       <CoordinateBoard
         position={props.position}
@@ -676,6 +691,8 @@ function VariablePositionEditor(props: {
         onKnownClick={(kind) => clickHand("black", kind)}
         onHandClick={() => clickHand("black", undefined)}
         variableSelected={props.selected !== undefined}
+        selectedId={props.selected?.id}
+        onVariableClick={props.selectVariable}
       />
     </div>
   );
@@ -689,6 +706,8 @@ function VariableHand(props: {
   onKnownClick: Parameters<typeof Hands>[0]["onClick"];
   onHandClick: () => void;
   variableSelected: boolean;
+  selectedId?: number;
+  onVariableClick: (id: number) => void;
 }) {
   const symbol = props.color === "black" ? "▲" : "△";
   const label = props.color === "black" ? "攻方駒台" : "受方駒台（自動補完）";
@@ -717,7 +736,15 @@ function VariableHand(props: {
           {variables.map((variable) => (
             <span
               key={variable.id}
-              className={`badge variable-hand-piece variable-hand-piece-${props.color}`}
+              className={`badge variable-hand-piece variable-hand-piece-${props.color}${
+                props.selectedId === variable.id
+                  ? " variable-hand-piece-selected"
+                  : ""
+              }`}
+              onClick={(event) => {
+                event.stopPropagation();
+                props.onVariableClick(variable.id);
+              }}
             >
               {symbol}V{variable.id}
             </span>
@@ -764,6 +791,12 @@ function CoordinateBoard(props: {
                       ? " variable-piece-selected"
                       : ""
                   }`}
+                  style={{
+                    transform:
+                      variable.color === "white"
+                        ? "rotate(180deg)"
+                        : "rotate(0deg)",
+                  }}
                 >
                   <span className="variable-owner-mark">
                     {variable.color === "black" ? "▲" : "△"}
@@ -838,7 +871,11 @@ function VariableControls(props: {
                       ? "primary"
                       : "outline-primary"
                   }
-                  onClick={() => props.setSelectedId(variable.id)}
+                  onClick={() =>
+                    props.setSelectedId(
+                      props.selected?.id === variable.id ? 0 : variable.id,
+                    )
+                  }
                 >
                   {symbol}V{variable.id} {locationLabel(variable.location)}
                 </Button>

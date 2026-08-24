@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useRef } from "react";
 import { SELECTED_COLOR } from "../constants";
 import * as model from "../../model";
 
@@ -27,7 +27,7 @@ export default function Board(props: {
             row === props.selected[0] &&
             col === props.selected[1]
           }
-        />
+        />,
       );
     }
     board.push(<tr key={row}>{rowPieces}</tr>);
@@ -47,23 +47,65 @@ function Square(props: {
   onClick: () => void;
   onRightClick: () => void;
 }) {
+  const lastTouchAt = useRef<number | undefined>(undefined);
+  const singleTapTimer = useRef<number | undefined>(undefined);
+  const suppressClickUntil = useRef(0);
+
+  useEffect(
+    () => () => {
+      if (singleTapTimer.current !== undefined) {
+        window.clearTimeout(singleTapTimer.current);
+      }
+    },
+    [],
+  );
+
+  const touchEnd = (event: React.TouchEvent<HTMLTableCellElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const now = Date.now();
+    suppressClickUntil.current = now + 500;
+    if (lastTouchAt.current !== undefined && now - lastTouchAt.current <= 350) {
+      if (singleTapTimer.current !== undefined) {
+        window.clearTimeout(singleTapTimer.current);
+        singleTapTimer.current = undefined;
+      }
+      lastTouchAt.current = undefined;
+      props.onRightClick();
+      return;
+    }
+
+    lastTouchAt.current = now;
+    singleTapTimer.current = window.setTimeout(() => {
+      lastTouchAt.current = undefined;
+      singleTapTimer.current = undefined;
+      props.onClick();
+    }, 350);
+  };
+
   return (
     <td
+      className="board-square"
       aria-label={props.label}
-      onClick={(_e) => props.onClick()}
+      onClick={() => {
+        if (Date.now() >= suppressClickUntil.current) {
+          props.onClick();
+        }
+      }}
+      onTouchEnd={touchEnd}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
         props.onRightClick();
       }}
       style={{
-        width: 32,
-        height: 36,
         padding: 0,
         border: "1px solid black",
         backgroundColor: props.selected ? SELECTED_COLOR : "white",
         fontSize: "1.5em",
         verticalAlign: "middle",
+        touchAction: "manipulation",
+        userSelect: "none",
       }}
     >
       {props.overlay ?? (props.piece ? pieceString(props.piece) : "")}

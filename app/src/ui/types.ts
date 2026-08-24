@@ -66,6 +66,9 @@ export type Event =
   | ClickHandEvent
   | ClickBoardEvent
   | {
+      ty: "clear-selection";
+    }
+  | {
       ty: "right-click-board";
       pos: [number, number];
     }

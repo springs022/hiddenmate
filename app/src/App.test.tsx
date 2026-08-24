@@ -94,3 +94,65 @@ test("loads the default single-king position from saved positions", () => {
   ).toBe("4k4/9/9/9/9/9/9/9/9 b - 1");
   expect(container.querySelector(".variable-piece")).toBeNull();
 });
+
+test("keeps a newly added variable unselected", () => {
+  const { container } = render(<App />);
+
+  fireEvent.click(screen.getByRole("button", { name: "攻方持駒に追加（▲）" }));
+
+  expect(container.querySelectorAll(".variable-piece-selected")).toHaveLength(
+    0,
+  );
+  expect(screen.getByRole("button", { name: /▲V2/ }).className).toContain(
+    "btn-outline-primary",
+  );
+
+  fireEvent.click(screen.getByText("▲V2"));
+  expect(
+    container.querySelectorAll(".variable-hand-piece-selected"),
+  ).toHaveLength(1);
+});
+
+test("toggles a board variable and clears selection after moving it", () => {
+  const { container } = render(<App />);
+  const variableSquare = screen.getByLabelText("64 V1");
+
+  fireEvent.click(variableSquare);
+  expect(container.querySelectorAll(".variable-piece-selected")).toHaveLength(
+    1,
+  );
+  fireEvent.click(variableSquare);
+  expect(container.querySelectorAll(".variable-piece-selected")).toHaveLength(
+    0,
+  );
+
+  fireEvent.click(variableSquare);
+  fireEvent.click(screen.getByLabelText("55"));
+  expect(screen.getByLabelText("55 V1")).not.toBeNull();
+  expect(container.querySelectorAll(".variable-piece-selected")).toHaveLength(
+    0,
+  );
+});
+
+test("rotates a white board variable like a standard white piece", () => {
+  render(<App />);
+
+  fireEvent.click(screen.getByRole("button", { name: "受方持駒に追加（△）" }));
+  fireEvent.click(screen.getByText("△V2"));
+  fireEvent.click(screen.getByLabelText("55"));
+
+  expect(
+    (screen.getByLabelText("55 V2").firstElementChild as HTMLElement).style
+      .transform,
+  ).toBe("rotate(180deg)");
+});
+
+test("treats a board double tap like a right click", () => {
+  render(<App />);
+  const silverSquare = screen.getByLabelText("83");
+
+  fireEvent.touchEnd(silverSquare);
+  fireEvent.touchEnd(silverSquare);
+
+  expect(silverSquare.textContent).toContain("全");
+});
