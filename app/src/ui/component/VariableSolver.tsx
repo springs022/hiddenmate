@@ -710,7 +710,7 @@ function VariableHand(props: {
   onVariableClick: (id: number) => void;
 }) {
   const symbol = props.color === "black" ? "▲" : "△";
-  const label = props.color === "black" ? "攻方駒台" : "受方駒台（自動補完）";
+  const label = props.color === "black" ? "攻方駒台" : "受方駒台";
   const variables = props.variables.filter(
     (variable) =>
       variable.color === props.color && variable.location.type === "hand",
@@ -843,7 +843,7 @@ function VariableControls(props: {
           variant="outline-primary"
           onClick={() => props.addVariableToHand("black")}
         >
-          攻方持駒に追加（▲）
+          攻方持駒に追加
         </Button>
         <Button
           className="flex-fill text-nowrap"
@@ -851,13 +851,10 @@ function VariableControls(props: {
           variant="outline-secondary"
           onClick={() => props.addVariableToHand("white")}
         >
-          受方持駒に追加（△）
+          受方持駒に追加
         </Button>
       </div>
       <h3 className="h6">覆面駒一覧</h3>
-      <p className="small text-muted mb-2">
-        選択後、移動先の盤面または駒台をクリックします。
-      </p>
       {props.variables.length > 0 ? (
         <div className="d-flex flex-wrap gap-2">
           {props.variables.map((variable) => {
