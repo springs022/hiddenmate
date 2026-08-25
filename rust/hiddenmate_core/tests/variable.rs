@@ -334,7 +334,7 @@ fn includes_valid_three_ply_line_even_when_shorter_mates_exist() {
 
     assert_eq!(
         shorter,
-        vec!["82▲生(42)", "82▲成(42)", "92▲生(42)", "92▲成(42)"]
+        vec!["82▲(42)", "82▲成(42)", "92▲(42)", "92▲成(42)"]
     );
     let up_to_three = solve_exact(&state, 3, 100)
         .iter()

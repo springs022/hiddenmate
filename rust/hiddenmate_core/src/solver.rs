@@ -60,16 +60,11 @@ fn format_observed_japanese(
                 .variable(id)
                 .expect("覆面駒が存在する")
                 .color;
-            let can_promote = state
-                .worlds()
-                .iter()
-                .filter_map(|world| world.variable(id))
-                .any(|piece| piece.kind.can_promote());
             format!(
                 "{}{}{}({})",
                 destination_label(destination, previous_destination),
                 color_symbol(color),
-                movement_suffix(promote, can_promote, color, source, destination),
+                if promote { "成" } else { "" },
                 square_label(source)
             )
         }
