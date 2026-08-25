@@ -28,7 +28,7 @@ test("renders HiddenMate title", () => {
   expect(
     screen.queryByText(/通常駒は盤面・駒台をクリックして移動できます/),
   ).toBeNull();
-  expect(screen.getByRole("button", { name: "覆面駒を検討" })).not.toBeNull();
+  expect(screen.getByRole("button", { name: "検討" })).not.toBeNull();
   expect(
     screen.getByRole("heading", { name: "Saved positions" }),
   ).not.toBeNull();
@@ -198,7 +198,7 @@ test("shows a spinner before starting a variable solve", async () => {
   jest.useFakeTimers();
   render(<App />);
 
-  fireEvent.click(screen.getByRole("button", { name: "覆面駒を検討" }));
+  fireEvent.click(screen.getByRole("button", { name: "検討" }));
 
   expect(screen.getByRole("status")).not.toBeNull();
   expect(screen.getByRole("button", { name: "検討中…" })).not.toBeNull();

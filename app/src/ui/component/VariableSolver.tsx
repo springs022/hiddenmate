@@ -953,37 +953,9 @@ function VariableSolveControls(props: {
   }, [props.plies]);
 
   return (
-    <div className="variable-solve-controls d-flex flex-wrap align-items-end gap-2 mb-3">
-      {props.plies !== undefined && props.setPlies && (
-        <Form.Group
-          className="variable-control-number"
-          controlId="variable-plies"
-        >
-          <Form.Label>手数</Form.Label>
-          <Form.Control
-            size="sm"
-            type="number"
-            min={1}
-            value={pliesInput}
-            onChange={(event) => {
-              const value = event.target.value;
-              setPliesInput(value);
-              if (value !== "") {
-                props.setPlies!(Math.max(1, Number(value) || 1));
-              }
-            }}
-            onBlur={() => {
-              if (pliesInput === "") {
-                setPliesInput("1");
-                props.setPlies!(1);
-              }
-            }}
-            disabled={props.solving}
-          />
-        </Form.Group>
-      )}
+    <div className="variable-solve-controls mb-3">
       {props.rule !== undefined && props.setRule && (
-        <Form.Group className="variable-rule" controlId="variable-rule">
+        <Form.Group className="variable-rule mb-2" controlId="variable-rule">
           <Form.Label>ルール</Form.Label>
           <div className="d-flex gap-2 text-nowrap">
             <Form.Check
@@ -1009,36 +981,68 @@ function VariableSolveControls(props: {
           </div>
         </Form.Group>
       )}
-      <Form.Group
-        className="variable-control-number"
-        controlId="variable-max-solutions"
-      >
-        <Form.Label>最大解数</Form.Label>
-        <Form.Control
+      <div className="variable-solve-actions d-flex flex-wrap align-items-end gap-2">
+        {props.plies !== undefined && props.setPlies && (
+          <Form.Group
+            className="variable-control-number"
+            controlId="variable-plies"
+          >
+            <Form.Label>手数</Form.Label>
+            <Form.Control
+              size="sm"
+              type="number"
+              min={1}
+              value={pliesInput}
+              onChange={(event) => {
+                const value = event.target.value;
+                setPliesInput(value);
+                if (value !== "") {
+                  props.setPlies!(Math.max(1, Number(value) || 1));
+                }
+              }}
+              onBlur={() => {
+                if (pliesInput === "") {
+                  setPliesInput("1");
+                  props.setPlies!(1);
+                }
+              }}
+              disabled={props.solving}
+            />
+          </Form.Group>
+        )}
+        <Form.Group
+          className="variable-control-number"
+          controlId="variable-max-solutions"
+        >
+          <Form.Label>最大解数</Form.Label>
+          <Form.Control
+            size="sm"
+            type="number"
+            min={1}
+            max={10000}
+            value={props.maxSolutions}
+            onChange={(event) =>
+              props.setMaxSolutions(
+                Math.max(1, Number(event.target.value) || 1),
+              )
+            }
+            disabled={props.solving}
+          />
+        </Form.Group>
+        <Button
+          className="variable-solve-button text-nowrap"
           size="sm"
-          type="number"
-          min={1}
-          max={10000}
-          value={props.maxSolutions}
-          onChange={(event) =>
-            props.setMaxSolutions(Math.max(1, Number(event.target.value) || 1))
-          }
+          onClick={props.onSolve}
           disabled={props.solving}
-        />
-      </Form.Group>
-      <Button
-        className="text-nowrap"
-        size="sm"
-        onClick={props.onSolve}
-        disabled={props.solving}
-      >
-        {props.solving ? "検討中…" : "覆面駒を検討"}
-      </Button>
-      {props.solving && (
-        <Spinner animation="border" role="status">
-          <span className="visually-hidden">検討中...</span>
-        </Spinner>
-      )}
+        >
+          {props.solving ? "検討中…" : "検討"}
+        </Button>
+        {props.solving && (
+          <Spinner animation="border" role="status">
+            <span className="visually-hidden">検討中...</span>
+          </Spinner>
+        )}
+      </div>
     </div>
   );
 }

@@ -43,18 +43,18 @@ code {
   }
 
   .variable-three-column-layout > .variable-layout-board {
-    flex: 0 0 32%;
-    max-width: 32%;
+    flex: 0 0 30%;
+    max-width: 30%;
   }
 
   .variable-three-column-layout > .variable-layout-settings {
-    flex: 0 0 31%;
-    max-width: 31%;
+    flex: 0 0 35%;
+    max-width: 35%;
   }
 
   .variable-three-column-layout > .variable-layout-results {
-    flex: 0 0 37%;
-    max-width: 37%;
+    flex: 0 0 35%;
+    max-width: 35%;
   }
 }
 
@@ -63,8 +63,8 @@ code {
   width: 6.5rem;
 }
 
-.variable-solve-controls {
-  flex-wrap: nowrap;
+.variable-solve-button {
+  width: 98px;
 }
 
 .variable-board-wrap {
@@ -138,8 +138,11 @@ code {
     flex-direction: column;
   }
 
-  .variable-solve-controls {
-    flex-wrap: wrap;
+  .variable-position-editor,
+  .variable-hand,
+  .variable-board-coordinate-shell {
+    margin-right: auto;
+    margin-left: auto;
   }
 
   .variable-file-labels {
