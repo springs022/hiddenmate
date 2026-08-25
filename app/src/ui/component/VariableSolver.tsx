@@ -926,6 +926,16 @@ function VariableSolveControls(props: {
   solving: boolean;
   onSolve: () => void;
 }) {
+  const [pliesInput, setPliesInput] = useState(
+    props.plies === undefined ? "" : String(props.plies),
+  );
+
+  useEffect(() => {
+    if (props.plies !== undefined) {
+      setPliesInput(String(props.plies));
+    }
+  }, [props.plies]);
+
   return (
     <div className="variable-solve-controls d-flex align-items-end gap-2 mb-3">
       {props.plies !== undefined && props.setPlies && (
@@ -938,10 +948,20 @@ function VariableSolveControls(props: {
             size="sm"
             type="number"
             min={1}
-            value={props.plies}
-            onChange={(event) =>
-              props.setPlies!(Math.max(1, Number(event.target.value) || 1))
-            }
+            value={pliesInput}
+            onChange={(event) => {
+              const value = event.target.value;
+              setPliesInput(value);
+              if (value !== "") {
+                props.setPlies!(Math.max(1, Number(value) || 1));
+              }
+            }}
+            onBlur={() => {
+              if (pliesInput === "") {
+                setPliesInput("1");
+                props.setPlies!(1);
+              }
+            }}
             disabled={props.solving}
           />
         </Form.Group>

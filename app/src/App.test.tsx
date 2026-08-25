@@ -209,6 +209,17 @@ test("shows a spinner before starting a variable solve", async () => {
   jest.useRealTimers();
 });
 
+test("allows clearing the plies field before entering a new value", () => {
+  render(<App />);
+  const plies = screen.getByLabelText("手数") as HTMLInputElement;
+
+  fireEvent.change(plies, { target: { value: "" } });
+  expect(plies.value).toBe("");
+
+  fireEvent.change(plies, { target: { value: "3" } });
+  expect(plies.value).toBe("3");
+});
+
 test("treats a board double tap like a right click", () => {
   render(<App />);
   const silverSquare = screen.getByLabelText("83");
