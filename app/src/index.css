@@ -48,13 +48,13 @@ code {
   }
 
   .variable-three-column-layout > .variable-layout-settings {
-    flex: 0 0 35%;
-    max-width: 35%;
+    flex: 0 0 31%;
+    max-width: 31%;
   }
 
   .variable-three-column-layout > .variable-layout-results {
-    flex: 0 0 35%;
-    max-width: 35%;
+    flex: 0 0 39%;
+    max-width: 39%;
   }
 }
 
@@ -131,6 +131,15 @@ code {
   padding: 0.5rem 0.65rem;
   border: 1px solid #adb5bd;
   border-radius: 0.25rem;
+  cursor: default;
+}
+
+.variable-hand * {
+  cursor: default;
+}
+
+.variable-solution-break-sp {
+  display: none;
 }
 
 @media (max-width: 575.98px) {
@@ -143,6 +152,14 @@ code {
   .variable-board-coordinate-shell {
     margin-right: auto;
     margin-left: auto;
+  }
+
+  .variable-solution-break-sp {
+    display: initial;
+  }
+
+  .variable-solution-break-pc {
+    display: none;
   }
 
   .variable-file-labels {

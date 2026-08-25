@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from "react";
+import { Fragment, useEffect, useReducer, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -1080,7 +1080,25 @@ function VariableResult(props: { response: VariableSolveResponse }) {
         <ol>
           {props.response.solutions.map((solution, index) => (
             <li key={`${index}-${solution.join("-")}`}>
-              <code>{solution.join(" ")}</code>
+              <code>
+                {solution.map((move, moveIndex) => (
+                  <Fragment key={`${moveIndex}-${move}`}>
+                    {move}
+                    {moveIndex < solution.length - 1 && (
+                      <>
+                        {" "}
+                        {(moveIndex + 1) % 4 === 0 && (
+                          <br className="variable-solution-break-sp" />
+                        )}
+                        {(moveIndex + 1) % 6 === 0 && (
+                          <br className="variable-solution-break-pc" />
+                        )}
+                      </>
+                    )}
+                  </Fragment>
+                ))}{" "}
+                まで {solution.length}手
+              </code>
             </li>
           ))}
         </ol>
