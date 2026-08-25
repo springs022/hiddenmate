@@ -136,4 +136,23 @@ mod hiddenmate_tests {
         );
         assert_eq!(value["solutions"][0][0], "84▲(64)");
     }
+
+    #[test]
+    fn even_plies_does_not_return_one_ply_solutions() {
+        let json = r#"{
+            "baseSfen": "9/9/kS7/N8/1L7/9/9/9/9 b - 1",
+            "plies": 2,
+            "variables": [{
+                "id": 1,
+                "color": "black",
+                "square": "64"
+            }]
+        }"#;
+
+        let response = solve_variable_problem_json(json, 100).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&response).unwrap();
+        let solutions = value["solutions"].as_array().unwrap();
+
+        assert!(solutions.is_empty());
+    }
 }

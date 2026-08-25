@@ -1,7 +1,8 @@
 use anyhow::{bail, Context, Result};
 use fmrs_core::{
     piece::{Color, Kind, KINDS},
-    position::Square,
+    position::{position::PositionAux, Square},
+    sfen,
 };
 use serde::Deserialize;
 
@@ -40,13 +41,20 @@ impl ProblemDocument {
     }
 
     pub fn into_problem(self) -> Result<VariableProblem> {
+        let mut base = PositionAux::from_sfen(&self.base_sfen)
+            .with_context(|| format!("SFENを解釈できません: {}", self.base_sfen))?;
+        base.set_turn(if self.plies % 2 == 0 {
+            Color::WHITE
+        } else {
+            Color::BLACK
+        });
         let variables = self
             .variables
             .into_iter()
             .map(VariableDocument::into_spec)
             .collect::<Result<Vec<_>>>()?;
         Ok(VariableProblem {
-            base_sfen: self.base_sfen,
+            base_sfen: sfen::encode_position(&base),
             variables,
         })
     }
@@ -161,5 +169,22 @@ mod tests {
             problem.variables[0].location,
             crate::VariableLocation::Hand(Color::WHITE)
         );
+    }
+
+    #[test]
+    fn uses_white_turn_for_even_plies() {
+        let document = ProblemDocument::from_json(
+            r#"{
+                "baseSfen": "9/9/k8/9/9/9/9/9/9 b - 1",
+                "plies": 2,
+                "variables": []
+            }"#,
+        )
+        .unwrap();
+
+        let problem = document.into_problem().unwrap();
+        let position = PositionAux::from_sfen(&problem.base_sfen).unwrap();
+
+        assert_eq!(position.turn(), Color::WHITE);
     }
 }
