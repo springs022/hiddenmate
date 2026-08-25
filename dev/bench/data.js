@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787619426072,
+  "lastUpdate": 1787629475496,
   "repoUrl": "https://github.com/springs022/hiddenmate",
   "entries": {
     "Instruction Count (iai-callgrind)": [
@@ -987,6 +987,58 @@ window.BENCHMARK_DATA = {
           {
             "name": "bench_near_mate",
             "value": 435330214,
+            "unit": "Instructions"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "springs022",
+            "username": "springs022",
+            "email": "hit.and.miss.masayume@gmail.com"
+          },
+          "committer": {
+            "name": "springs022",
+            "username": "springs022",
+            "email": "hit.and.miss.masayume@gmail.com"
+          },
+          "id": "4ac7a6244bae44f2586ff24a7636e0345504dd99",
+          "message": "受先初手の待手を生成する",
+          "timestamp": "2026-08-25T03:27:18Z",
+          "url": "https://github.com/springs022/hiddenmate/commit/4ac7a6244bae44f2586ff24a7636e0345504dd99"
+        },
+        "date": 1787629473882,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "bench_black_advance",
+            "value": 51012,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_white_advance",
+            "value": 124170,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_reachable",
+            "value": 18369,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_attacker",
+            "value": 122124,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_canonicalize",
+            "value": 2258,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_near_mate",
+            "value": 439320149,
             "unit": "Instructions"
           }
         ]
