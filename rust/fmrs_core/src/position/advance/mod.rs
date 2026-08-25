@@ -8,5 +8,5 @@ pub mod pinned;
 mod white;
 
 pub use common::checked;
-pub use free::legal_movements;
+pub use free::{is_legal_mate, legal_movements};
 pub use options::{AdvanceError, AdvanceOptions, AdvanceResult};

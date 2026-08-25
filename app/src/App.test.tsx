@@ -8,7 +8,7 @@ test("renders HiddenMate title", () => {
   render(<App />);
   expect(screen.getByRole("heading", { name: "HiddenMate" })).not.toBeNull();
   expect(
-    screen.getByRole("heading", { name: "覆面駒入りの協力詰" }),
+    screen.getByRole("heading", { name: "覆面駒入りの協力詰／協力自玉詰" }),
   ).not.toBeNull();
   expect(screen.getByRole("button", { name: "盤面・フォーム" })).not.toBeNull();
   expect(screen.getByLabelText("通常駒のbase SFEN")).not.toBeNull();
@@ -218,6 +218,22 @@ test("allows clearing the plies field before entering a new value", () => {
 
   fireEvent.change(plies, { target: { value: "3" } });
   expect(plies.value).toBe("3");
+});
+
+test("selects help-selfmate and includes the rule in problem JSON", () => {
+  render(<App />);
+
+  const helpmate = screen.getByLabelText("協力詰") as HTMLInputElement;
+  const helpSelfmate = screen.getByLabelText("協力自玉詰") as HTMLInputElement;
+  expect(helpmate.checked).toBe(true);
+
+  fireEvent.click(helpSelfmate);
+  expect(helpSelfmate.checked).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "JSON詳細編集" }));
+
+  expect(
+    (screen.getByLabelText("問題JSON") as HTMLTextAreaElement).value,
+  ).toContain('"rule": "helpSelfmate"');
 });
 
 test("treats a board double tap like a right click", () => {

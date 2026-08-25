@@ -6,7 +6,7 @@ use fmrs_core::{
     position::position::PositionAux,
 };
 
-use crate::{ConcreteWorld, HiddenState, VariableId, VariableLocation, VariablePiece};
+use crate::{ConcreteWorld, HiddenState, MateRule, VariableId, VariableLocation, VariablePiece};
 
 const MAX_VARIABLES: usize = 6;
 
@@ -28,6 +28,7 @@ pub struct VariableSpec {
 pub struct VariableProblem {
     pub base_sfen: String,
     pub variables: Vec<VariableSpec>,
+    pub rule: MateRule,
 }
 
 impl VariableProblem {
@@ -41,11 +42,18 @@ impl VariableProblem {
         validate_specs(&base, &self.variables)?;
 
         let mut worlds = Vec::new();
-        enumerate_assignments(&base, &self.variables, 0, Vec::new(), &mut worlds);
+        enumerate_assignments(
+            &base,
+            &self.variables,
+            self.rule,
+            0,
+            Vec::new(),
+            &mut worlds,
+        );
         if worlds.is_empty() {
             bail!("初形の合法性と矛盾しない覆面駒の割当がありません");
         }
-        Ok(HiddenState::new(worlds))
+        Ok(HiddenState::new(worlds, self.rule))
     }
 }
 
@@ -79,12 +87,13 @@ fn validate_specs(base: &PositionAux, specs: &[VariableSpec]) -> Result<()> {
 fn enumerate_assignments(
     base: &PositionAux,
     specs: &[VariableSpec],
+    rule: MateRule,
     index: usize,
     assigned: Vec<VariablePiece>,
     worlds: &mut Vec<ConcreteWorld>,
 ) {
     if index == specs.len() {
-        if let Some(world) = build_world(base.clone(), assigned) {
+        if let Some(world) = build_world(base.clone(), assigned, rule) {
             worlds.push(world);
         }
         return;
@@ -103,11 +112,15 @@ fn enumerate_assignments(
             kind,
             location: spec.location,
         });
-        enumerate_assignments(base, specs, index + 1, next, worlds);
+        enumerate_assignments(base, specs, rule, index + 1, next, worlds);
     }
 }
 
-fn build_world(mut position: PositionAux, variables: Vec<VariablePiece>) -> Option<ConcreteWorld> {
+fn build_world(
+    mut position: PositionAux,
+    variables: Vec<VariablePiece>,
+    rule: MateRule,
+) -> Option<ConcreteWorld> {
     for piece in &variables {
         match piece.location {
             VariableLocation::Board(square) => {
@@ -142,7 +155,12 @@ fn build_world(mut position: PositionAux, variables: Vec<VariablePiece>) -> Opti
 
     let white_kings = position.bitboard(Color::WHITE, Kind::King).count_ones();
     let black_kings = position.bitboard(Color::BLACK, Kind::King).count_ones();
-    if white_kings != 1 || black_kings > 1 {
+    if white_kings != 1
+        || match rule {
+            MateRule::Helpmate => black_kings > 1,
+            MateRule::HelpSelfmate => black_kings != 1,
+        }
+    {
         return None;
     }
 
@@ -158,6 +176,10 @@ fn build_world(mut position: PositionAux, variables: Vec<VariablePiece>) -> Opti
         return None;
     }
     if position.turn().is_white() && black_checked {
+        return None;
+    }
+    // 協力自玉詰を白番から始める場合、白の初手は黒の王手への応手である。
+    if rule == MateRule::HelpSelfmate && position.turn().is_white() && !white_checked {
         return None;
     }
 

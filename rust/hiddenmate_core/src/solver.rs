@@ -115,13 +115,12 @@ pub fn solve_exact(initial: &HiddenState, plies: usize, max_solutions: usize) ->
 
     let mut solutions = Vec::new();
     for depth in 0..=plies {
-        // 詰み局面は受方手番にしか現れないため、到達不能な偶奇は省略する。
-        let ends_with_white_turn = if initial.turn().is_black() {
-            depth % 2 == 1
+        let turn_at_depth = if depth % 2 == 0 {
+            initial.turn()
         } else {
-            depth % 2 == 0
+            initial.turn().opposite()
         };
-        if !ends_with_white_turn {
+        if turn_at_depth != initial.rule().terminal_turn() {
             continue;
         }
 
@@ -175,7 +174,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::{VariableId, VariableLocation, VariableProblem, VariableSpec};
+    use crate::{MateRule, VariableId, VariableLocation, VariableProblem, VariableSpec};
 
     fn state_with_variable(color: Color) -> HiddenState {
         VariableProblem {
@@ -186,6 +185,7 @@ mod tests {
                 location: VariableLocation::Board(Square::S64),
                 candidates: vec![Kind::Rook, Kind::ProRook],
             }],
+            rule: MateRule::Helpmate,
         }
         .enumerate()
         .unwrap()
@@ -201,6 +201,7 @@ mod tests {
                 location: VariableLocation::Board(Square::S64),
                 candidates: vec![Kind::Rook],
             }],
+            rule: MateRule::Helpmate,
         }
         .enumerate()
         .unwrap();

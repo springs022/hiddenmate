@@ -39,18 +39,20 @@ actix-cors = "*"
 serde_json = "*"
 futures = "*"
 actix-files = "*"
-pprof = { version = "*", features = [
-    "criterion",
-    "flamegraph",
-    "_protobuf",
-    "protobuf-codec",
-] }
 log = "*"
 env_logger = "*"
 rayon = "*"
 rustc-hash = "*"
 url = "*"
 regex = "*"
+
+[target.'cfg(unix)'.dependencies]
+pprof = { version = "*", features = [
+    "criterion",
+    "flamegraph",
+    "_protobuf",
+    "protobuf-codec",
+] }
 
 [dev-dependencies]
 pretty_assertions = "*"

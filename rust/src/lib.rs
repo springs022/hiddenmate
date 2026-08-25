@@ -38,6 +38,15 @@ enum Action {
         algorithm: Algorithm,
         sfen_like: Option<String>,
     },
+    /// 通常駒の協力自玉詰を検討する。
+    HelpSelfmate {
+        sfen_like: Option<String>,
+        /// この手数以下の解をすべて列挙する。省略時は最短解のみ。
+        #[arg(long)]
+        plies: Option<usize>,
+        #[arg(long, default_value = "10")]
+        solutions_upto: usize,
+    },
     Server,
     OneWayMate {
         #[arg(long, default_value = "beam")]
@@ -102,6 +111,11 @@ pub async fn do_main() -> anyhow::Result<()> {
             algorithm,
             sfen_like,
         } => command::solve(algorithm, sfen_like)?,
+        Action::HelpSelfmate {
+            sfen_like,
+            plies,
+            solutions_upto,
+        } => command::help_selfmate(sfen_like, plies, solutions_upto)?,
         Action::Server => command::server(1234).await?,
         Action::OneWayMate {
             algorithm,

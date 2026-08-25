@@ -1,6 +1,7 @@
 pub mod backward;
 pub mod batch_square;
 pub mod bench;
+mod help_selfmate;
 pub mod magic;
 mod one_way_mate;
 mod server;
@@ -12,6 +13,7 @@ mod solve;
 mod solve_bench;
 
 pub use bench::bench;
+pub use help_selfmate::help_selfmate;
 pub use one_way_mate::{one_way_mate, OneWayMateGenerator};
 pub use server::server;
 pub use single_king_smoke::{single_king_smoke, SingleKingSmokeCommand};

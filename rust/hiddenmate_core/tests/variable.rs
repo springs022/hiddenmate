@@ -3,8 +3,8 @@ use fmrs_core::{
     position::Square,
 };
 use hiddenmate_core::{
-    format_solution_japanese, solve_exact, DropIdentity, MoveIdentity, ObservedMove, VariableId,
-    VariableLocation, VariableProblem, VariableSpec,
+    format_solution_japanese, solve_exact, DropIdentity, MateRule, MoveIdentity, ObservedMove,
+    VariableId, VariableLocation, VariableProblem, VariableSpec,
 };
 
 fn square(file: usize, rank: usize) -> Square {
@@ -24,6 +24,7 @@ fn rejects_more_than_six_variables() {
 
     let error = VariableProblem {
         base_sfen: "9/9/k8/9/9/9/9/9/9 b - 1".to_string(),
+        rule: MateRule::Helpmate,
         variables,
     }
     .enumerate()
@@ -36,6 +37,7 @@ fn rejects_more_than_six_variables() {
 fn enumerates_candidate_worlds_and_completes_white_hand() {
     let state = VariableProblem {
         base_sfen: "9/9/k8/9/9/9/9/9/9 b - 1".to_string(),
+        rule: MateRule::Helpmate,
         variables: vec![VariableSpec {
             id: VariableId(1),
             color: Color::BLACK,
@@ -64,6 +66,7 @@ fn checking_obligation_resolves_rook_to_promoted_rook() {
     // 龍なら斜め一歩の利きで王手になる。
     let state = VariableProblem {
         base_sfen: "9/9/k8/9/9/9/9/9/9 b - 1".to_string(),
+        rule: MateRule::Helpmate,
         variables: vec![VariableSpec {
             id: VariableId(7),
             color: Color::BLACK,
@@ -92,6 +95,7 @@ fn allows_initial_check_against_attacker_king() {
     // 攻方手番では、攻方玉に王手が掛かっている初形も合法。
     let state = VariableProblem {
         base_sfen: "8k/7g1/8K/9/9/9/9/9/9 b - 1".to_string(),
+        rule: MateRule::Helpmate,
         variables: vec![],
     }
     .enumerate()
@@ -104,6 +108,7 @@ fn allows_initial_check_against_attacker_king() {
 fn resolved_variable_is_ordinary_before_its_next_move() {
     let state = VariableProblem {
         base_sfen: "9/9/kS7/N8/1L7/9/9/9/9 b - 1".to_string(),
+        rule: MateRule::Helpmate,
         variables: vec![VariableSpec {
             id: VariableId(1),
             color: Color::BLACK,
@@ -136,6 +141,7 @@ fn solves_one_ply_variable_helpmate() {
     // 64V-94を防ぐため、64V-84だけで93玉が詰む。
     let state = VariableProblem {
         base_sfen: "9/9/kS7/N8/1L7/9/9/9/9 b - 1".to_string(),
+        rule: MateRule::Helpmate,
         variables: vec![VariableSpec {
             id: VariableId(1),
             color: Color::BLACK,
@@ -172,6 +178,7 @@ fn solves_one_ply_variable_helpmate() {
 fn rejects_duplicate_variable_ids() {
     let error = VariableProblem {
         base_sfen: "9/9/k8/9/9/9/9/9/9 b - 1".to_string(),
+        rule: MateRule::Helpmate,
         variables: vec![
             VariableSpec {
                 id: VariableId(1),
@@ -197,6 +204,7 @@ fn rejects_duplicate_variable_ids() {
 fn enumerates_variable_in_hand_and_can_observe_its_drop() {
     let state = VariableProblem {
         base_sfen: "9/9/k8/9/9/9/9/9/9 b - 1".to_string(),
+        rule: MateRule::Helpmate,
         variables: vec![VariableSpec {
             id: VariableId(4),
             color: Color::BLACK,
@@ -226,6 +234,7 @@ fn pawn_drop_mate_world_is_removed_from_a_variable_drop() {
     // 観測した94▲打から歩の世界だけを除外し、解として成立させる。
     let state = VariableProblem {
         base_sfen: "9/9/kS7/9/1L7/9/9/9/9 b - 1".to_string(),
+        rule: MateRule::Helpmate,
         variables: vec![VariableSpec {
             id: VariableId(1),
             color: Color::BLACK,
@@ -263,6 +272,7 @@ fn defender_pawn_block_is_not_filtered_as_pawn_drop_mate() {
     // 攻方に次の王手がなくても、受方の35歩合自体は合法である。
     let state = VariableProblem {
         base_sfen: "4K4/9/9/9/4R3k/9/9/9/4r4 w - 1".to_string(),
+        rule: MateRule::Helpmate,
         variables: vec![],
     }
     .enumerate()
@@ -279,6 +289,7 @@ fn defender_pawn_block_is_not_filtered_as_pawn_drop_mate() {
 fn includes_valid_three_ply_line_even_when_shorter_mates_exist() {
     let state = VariableProblem {
         base_sfen: "9/9/kS7/N8/9/1L7/9/9/9 b - 1".to_string(),
+        rule: MateRule::Helpmate,
         variables: vec![VariableSpec {
             id: VariableId(1),
             color: Color::BLACK,
@@ -332,4 +343,48 @@ fn includes_valid_three_ply_line_even_when_shorter_mates_exist() {
     assert!(up_to_three
         .iter()
         .any(|solution| solution == "75▲成(42) 84歩打 84馬(75)"));
+}
+
+#[test]
+fn solves_known_help_selfmate_up_to_four_plies() {
+    let state = VariableProblem {
+        base_sfen: "9/9/9/9/7l1/9/8k/9/7SK b G 1".to_string(),
+        variables: vec![],
+        rule: MateRule::HelpSelfmate,
+    }
+    .enumerate()
+    .unwrap();
+
+    let solutions = solve_exact(&state, 4, 100);
+
+    assert_eq!(
+        solutions.iter().map(Vec::len).collect::<Vec<_>>(),
+        vec![2, 4, 4, 4]
+    );
+}
+
+#[test]
+fn help_selfmate_requires_exactly_one_attacker_king_in_every_world() {
+    let error = VariableProblem {
+        base_sfen: "9/9/9/9/7l1/9/8k/9/8S b G 1".to_string(),
+        variables: vec![],
+        rule: MateRule::HelpSelfmate,
+    }
+    .enumerate()
+    .unwrap_err();
+
+    assert!(error.to_string().contains("割当がありません"));
+}
+
+#[test]
+fn white_start_help_selfmate_requires_an_initial_check() {
+    let error = VariableProblem {
+        base_sfen: "8k/9/9/9/9/9/9/9/8K w - 1".to_string(),
+        variables: vec![],
+        rule: MateRule::HelpSelfmate,
+    }
+    .enumerate()
+    .unwrap_err();
+
+    assert!(error.to_string().contains("割当がありません"));
 }

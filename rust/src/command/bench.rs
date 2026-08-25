@@ -1,10 +1,16 @@
+#[cfg(unix)]
 use std::{fs::File, io::Write};
 
+#[cfg(unix)]
 use fmrs_core::sfen;
+#[cfg(unix)]
 use pprof::protos::Message;
 
-use crate::solver::{self, Algorithm};
+#[cfg(unix)]
+use crate::solver;
+use crate::solver::Algorithm;
 
+#[cfg(unix)]
 use super::{one_way_mate, OneWayMateGenerator};
 
 #[derive(Debug, Clone, clap::ValueEnum)]
@@ -19,31 +25,41 @@ pub fn bench(
     file: &str,
     solutions_upto: Option<usize>,
 ) -> anyhow::Result<()> {
-    let guard = pprof::ProfilerGuard::new(100).unwrap();
-
-    match cmd {
-        BenchCommand::OneWay => bench_one_way()?,
-        BenchCommand::Solve => bench_solve(algo, file, solutions_upto)?,
-    }
-
-    let report = guard.report().build().unwrap();
-    let mut file = File::create("prof/profile.pb").unwrap();
-    let profile = report.pprof().unwrap();
-
-    let mut content = Vec::new();
-    profile.write_to_vec(&mut content).unwrap();
-    file.write_all(&content).unwrap();
-
+    #[cfg(not(unix))]
     {
-        let file = File::create("prof/flamegraph.svg").unwrap();
-        let mut options = pprof::flamegraph::Options::default();
-        options.image_width = Some(2500);
-        report.flamegraph_with_options(file, &mut options).unwrap();
+        let _ = (cmd, algo, file, solutions_upto);
+        anyhow::bail!("プロファイラを使うbenchコマンドはUnix環境専用です");
     }
 
-    Ok(())
+    #[cfg(unix)]
+    {
+        let guard = pprof::ProfilerGuard::new(100).unwrap();
+
+        match cmd {
+            BenchCommand::OneWay => bench_one_way()?,
+            BenchCommand::Solve => bench_solve(algo, file, solutions_upto)?,
+        }
+
+        let report = guard.report().build().unwrap();
+        let mut file = File::create("prof/profile.pb").unwrap();
+        let profile = report.pprof().unwrap();
+
+        let mut content = Vec::new();
+        profile.write_to_vec(&mut content).unwrap();
+        file.write_all(&content).unwrap();
+
+        {
+            let file = File::create("prof/flamegraph.svg").unwrap();
+            let mut options = pprof::flamegraph::Options::default();
+            options.image_width = Some(2500);
+            report.flamegraph_with_options(file, &mut options).unwrap();
+        }
+
+        Ok(())
+    }
 }
 
+#[cfg(unix)]
 fn bench_solve(algo: Algorithm, file: &str, solutions_upto: Option<usize>) -> anyhow::Result<()> {
     let sfen = std::fs::read_to_string(file)?;
     let position = sfen::decode_position(&sfen).map_err(|_e| anyhow::anyhow!("parse failed"))?;
@@ -62,6 +78,7 @@ fn bench_solve(algo: Algorithm, file: &str, solutions_upto: Option<usize>) -> an
     Ok(())
 }
 
+#[cfg(unix)]
 fn bench_one_way() -> anyhow::Result<()> {
     one_way_mate(OneWayMateGenerator::Beam, 0, 8, Some(33))?;
 

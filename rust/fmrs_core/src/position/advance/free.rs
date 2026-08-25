@@ -56,6 +56,35 @@ pub fn legal_movements(position: &PositionAux, result: &mut Vec<Movement>) {
     }
 }
 
+/// 手番側の玉が通常の意味で詰んでいるかを返す。
+///
+/// `legal_movements` は高速な着手生成を優先して打歩詰めの歩打ちも一旦生成するため、
+/// ここではその歩打ちだけを再帰的に除外してから合法応手の有無を判定する。
+/// 歩打ちを再帰するたびに手駒の歩が1枚減るので、この再帰は有限である。
+pub fn is_legal_mate(position: &mut PositionAux) -> bool {
+    let turn = position.turn();
+    if !position.checked_slow(turn) {
+        return false;
+    }
+
+    !has_legal_movement(position)
+}
+
+fn has_legal_movement(position: &PositionAux) -> bool {
+    let mut movements = Vec::new();
+    legal_movements(position, &mut movements);
+
+    movements.into_iter().any(|movement| {
+        if !movement.is_pawn_drop() {
+            return true;
+        }
+
+        let mut next = position.clone();
+        next.do_move(&movement);
+        !is_legal_mate(&mut next)
+    })
+}
+
 fn push_if_king_safe(position: &PositionAux, movement: Movement, result: &mut Vec<Movement>) {
     let mover = position.turn();
     let mut next = position.clone();
@@ -78,5 +107,14 @@ mod tests {
         assert!(movements
             .iter()
             .any(|movement| matches!(movement, Movement::Drop(_, Kind::Pawn))));
+    }
+
+    #[test]
+    fn detects_mate_for_either_color() {
+        let mut black_mated = PositionAux::from_sfen("7rK/7g1/9/9/9/9/9/9/4k4 b - 1").unwrap();
+        assert!(is_legal_mate(&mut black_mated));
+
+        let mut white_mated = PositionAux::from_sfen("4K4/9/9/9/9/9/9/7G1/7Rk w - 1").unwrap();
+        assert!(is_legal_mate(&mut white_mated));
     }
 }

@@ -158,4 +158,25 @@ mod hiddenmate_tests {
             .iter()
             .all(|solution| solution.as_array().unwrap().len() == 2));
     }
+
+    #[test]
+    fn solves_help_selfmate_rule_for_web() {
+        let json = r#"{
+            "baseSfen": "9/9/9/9/7l1/9/8k/9/7SK b G 1",
+            "plies": 4,
+            "rule": "helpSelfmate",
+            "variables": []
+        }"#;
+
+        let response = solve_variable_problem_json(json, 100).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&response).unwrap();
+        let lengths = value["solutions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|solution| solution.as_array().unwrap().len())
+            .collect::<Vec<_>>();
+
+        assert_eq!(lengths, vec![2, 4, 4, 4]);
+    }
 }

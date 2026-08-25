@@ -7,6 +7,7 @@
 mod format;
 mod observed;
 mod problem;
+mod rule;
 mod solver;
 mod state;
 mod world;
@@ -14,6 +15,7 @@ mod world;
 pub use format::ProblemDocument;
 pub use observed::{DropIdentity, MoveIdentity, ObservedMove};
 pub use problem::{VariableProblem, VariableSpec};
+pub use rule::MateRule;
 pub use solver::{format_solution_japanese, solve_exact, Solution};
 pub use state::HiddenState;
 pub use world::{ConcreteWorld, VariableId, VariableLocation, VariablePiece};

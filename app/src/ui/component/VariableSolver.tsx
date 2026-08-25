@@ -25,6 +25,7 @@ import Board from "./Board";
 import Hands from "./Hands";
 
 type InputMode = "form" | "json";
+type MateRule = "helpmate" | "helpSelfmate";
 type VariableLocation = { type: "board"; square: string } | { type: "hand" };
 
 interface VariableDraft {
@@ -43,6 +44,7 @@ interface ProblemVariable {
 interface ProblemDocument {
   baseSfen: string;
   plies: number;
+  rule?: MateRule;
   variables: ProblemVariable[];
 }
 
@@ -111,10 +113,11 @@ function baseSfenFromPosition(position: Position): string {
 function buildProblemJson(
   baseSfen: string,
   plies: number,
+  rule: MateRule,
   variables: VariableDraft[],
 ): string {
   return JSON.stringify(
-    buildProblemDocument(baseSfen, plies, variables),
+    buildProblemDocument(baseSfen, plies, variables, rule),
     null,
     2,
   );
@@ -124,10 +127,12 @@ function buildProblemDocument(
   baseSfen: string,
   plies: number,
   variables: VariableDraft[],
+  rule: MateRule = "helpmate",
 ): ProblemDocument {
   return {
     baseSfen,
     plies,
+    rule,
     variables: variables.map((variable) => ({
       id: variable.id,
       color: variable.color,
@@ -184,7 +189,12 @@ function validSavedVariableProblems(value: unknown): SavedVariableProblem[] {
   });
 }
 
-const initialProblem = buildProblemJson(initialBaseSfen, 1, initialVariables);
+const initialProblem = buildProblemJson(
+  initialBaseSfen,
+  1,
+  "helpmate",
+  initialVariables,
+);
 
 export function VariableSolver() {
   const [editorState, dispatch] = useReducer(reduce, undefined, () => {
@@ -195,6 +205,7 @@ export function VariableSolver() {
   const [inputMode, setInputMode] = useState<InputMode>("form");
   const [sfenInput, setSfenInput] = useState(initialBaseSfen);
   const [plies, setPlies] = useState(1);
+  const [rule, setRule] = useState<MateRule>("helpmate");
   const [variables, setVariables] = useState<VariableDraft[]>(initialVariables);
   const [selectedId, setSelectedId] = useState<number>(0);
   const [manualProblem, setManualProblem] = useState(initialProblem);
@@ -208,7 +219,7 @@ export function VariableSolver() {
 
   const baseSfen = baseSfenFromPosition(editorState.position);
   const selected = variables.find((variable) => variable.id === selectedId);
-  const generatedProblem = buildProblemJson(baseSfen, plies, variables);
+  const generatedProblem = buildProblemJson(baseSfen, plies, rule, variables);
 
   useEffect(() => setSfenInput(baseSfen), [baseSfen]);
   useEffect(() => {
@@ -365,6 +376,7 @@ export function VariableSolver() {
       position: editablePositionFromBaseSfen(problem.baseSfen),
     });
     setPlies(problem.plies);
+    setRule(problem.rule ?? "helpmate");
     const loaded = problem.variables.map(problemVariableToDraft);
     setVariables(loaded);
     setSelectedId(0);
@@ -388,7 +400,7 @@ export function VariableSolver() {
     const trimmed = name.trim() || baseSfen;
     const saved = {
       name: trimmed,
-      problem: buildProblemDocument(baseSfen, plies, variables),
+      problem: buildProblemDocument(baseSfen, plies, variables, rule),
     };
     setSavedPositions((current) =>
       [saved, ...current].slice(0, maxSavedPositions),
@@ -423,7 +435,7 @@ export function VariableSolver() {
   return (
     <Card className="mb-4">
       <Card.Header as="h2" className="h5 mb-0">
-        覆面駒入りの協力詰
+        覆面駒入りの協力詰／協力自玉詰
       </Card.Header>
       <Card.Body>
         <ButtonGroup className="mb-3" aria-label="問題入力方法">
@@ -498,6 +510,8 @@ export function VariableSolver() {
                 <VariableSolveControls
                   plies={plies}
                   setPlies={setPlies}
+                  rule={rule}
+                  setRule={setRule}
                   maxSolutions={maxSolutions}
                   setMaxSolutions={setMaxSolutions}
                   solving={solving}
@@ -921,6 +935,8 @@ function VariableControls(props: {
 function VariableSolveControls(props: {
   plies?: number;
   setPlies?: (plies: number) => void;
+  rule?: MateRule;
+  setRule?: (rule: MateRule) => void;
   maxSolutions: number;
   setMaxSolutions: (maxSolutions: number) => void;
   solving: boolean;
@@ -937,7 +953,7 @@ function VariableSolveControls(props: {
   }, [props.plies]);
 
   return (
-    <div className="variable-solve-controls d-flex align-items-end gap-2 mb-3">
+    <div className="variable-solve-controls d-flex flex-wrap align-items-end gap-2 mb-3">
       {props.plies !== undefined && props.setPlies && (
         <Form.Group
           className="variable-control-number"
@@ -964,6 +980,33 @@ function VariableSolveControls(props: {
             }}
             disabled={props.solving}
           />
+        </Form.Group>
+      )}
+      {props.rule !== undefined && props.setRule && (
+        <Form.Group className="variable-rule" controlId="variable-rule">
+          <Form.Label>ルール</Form.Label>
+          <div className="d-flex gap-2 text-nowrap">
+            <Form.Check
+              inline
+              type="radio"
+              name="variable-rule"
+              id="variable-rule-helpmate"
+              label="協力詰"
+              checked={props.rule === "helpmate"}
+              onChange={() => props.setRule!("helpmate")}
+              disabled={props.solving}
+            />
+            <Form.Check
+              inline
+              type="radio"
+              name="variable-rule"
+              id="variable-rule-help-selfmate"
+              label="協力自玉詰"
+              checked={props.rule === "helpSelfmate"}
+              onChange={() => props.setRule!("helpSelfmate")}
+              disabled={props.solving}
+            />
+          </div>
         </Form.Group>
       )}
       <Form.Group
@@ -1088,6 +1131,9 @@ function isProblemDocument(value: unknown): value is ProblemDocument {
   return (
     typeof document.baseSfen === "string" &&
     typeof document.plies === "number" &&
+    (document.rule === undefined ||
+      document.rule === "helpmate" ||
+      document.rule === "helpSelfmate") &&
     Array.isArray(document.variables) &&
     document.variables.every((variable) => {
       if (!variable || typeof variable !== "object") {

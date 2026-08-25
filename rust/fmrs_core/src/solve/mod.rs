@@ -1,3 +1,4 @@
+pub mod help_selfmate;
 pub mod low_mem_standard;
 pub mod mate_within;
 pub mod one_way;

@@ -3,12 +3,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use fmrs_core::{
     piece::{Color, Kind},
     position::{
-        advance::{advance::advance_aux, legal_movements},
+        advance::{advance::advance_aux, is_legal_mate, legal_movements},
         AdvanceOptions, Movement,
     },
 };
 
-use crate::{ConcreteWorld, ObservedMove, VariableId};
+use crate::{ConcreteWorld, MateRule, ObservedMove, VariableId};
 
 /// これまでの観測と矛盾しない具体世界の集合。
 #[derive(Clone, Debug)]
@@ -17,25 +17,29 @@ pub struct HiddenState {
     /// 一意に確定して普通の駒へ戻った覆面駒。
     resolved: BTreeMap<VariableId, Kind>,
     /// 偶数手協力詰の受先初手では、王手されていなくても受方が着手できる。
+    /// 協力自玉詰の白番開始は通常の王手応手なので、この特例を適用しない。
     free_white_move: bool,
+    rule: MateRule,
 }
 
 impl HiddenState {
-    pub(crate) fn new(worlds: Vec<ConcreteWorld>) -> Self {
-        let free_white_move = worlds[0].position().turn().is_white();
-        Self::with_resolved(worlds, BTreeMap::new(), free_white_move)
+    pub(crate) fn new(worlds: Vec<ConcreteWorld>, rule: MateRule) -> Self {
+        let free_white_move = rule == MateRule::Helpmate && worlds[0].position().turn().is_white();
+        Self::with_resolved(worlds, BTreeMap::new(), free_white_move, rule)
     }
 
     fn with_resolved(
         worlds: Vec<ConcreteWorld>,
         resolved: BTreeMap<VariableId, Kind>,
         free_white_move: bool,
+        rule: MateRule,
     ) -> Self {
         debug_assert!(!worlds.is_empty());
         let mut state = Self {
             worlds,
             resolved,
             free_white_move,
+            rule,
         };
         state.reveal_resolved_variables();
         state
@@ -75,6 +79,10 @@ impl HiddenState {
 
     pub fn turn(&self) -> Color {
         self.worlds[0].position().turn()
+    }
+
+    pub fn rule(&self) -> MateRule {
+        self.rule
     }
 
     pub fn candidates(&self, id: VariableId) -> BTreeSet<Kind> {
@@ -119,22 +127,30 @@ impl HiddenState {
                 next_worlds,
                 self.resolved.clone(),
                 false,
+                self.rule,
             ))
         }
     }
 
-    /// 残るすべての候補世界で受方に合法応手がないときだけ詰みとする。
+    /// 残るすべての候補世界で、選択したルールの対象玉が詰んだときだけ詰みとする。
     pub fn is_proven_mate(&self) -> bool {
-        if self.turn().is_black() {
+        if self.turn() != self.rule.terminal_turn() {
             return false;
         }
         self.worlds.iter().all(|world| {
             let mut position = world.position().clone();
-            let mut movements = Vec::new();
-            matches!(
-                advance_aux(&mut position, &AdvanceOptions::default(), &mut movements),
-                Ok(true)
-            ) && movements.is_empty()
+            match self.rule {
+                MateRule::Helpmate => {
+                    let mut movements = Vec::new();
+                    matches!(
+                        advance_aux(&mut position, &AdvanceOptions::default(), &mut movements),
+                        Ok(true)
+                    ) && movements.is_empty()
+                }
+                MateRule::HelpSelfmate => {
+                    fmrs_core::solve::help_selfmate::is_help_selfmate(&mut position)
+                }
+            }
         })
     }
 
@@ -173,20 +189,71 @@ fn concrete_moves(world: &ConcreteWorld, free_white_move: bool) -> Vec<(Observed
         .collect()
 }
 
-/// 黒の王手生成では打歩詰めも一旦候補に含まれるため、着手として公開する前に除く。
+/// 合法手生成では打歩詰めも一旦候補に含まれるため、着手として公開する前に除く。
 /// 覆面駒では、この除外によって「歩なら不合法」という候補世界だけが消える。
 fn is_illegal_pawn_drop_mate(world: &ConcreteWorld, movement: &Movement) -> bool {
-    // このソルバーで攻方だけに課している王手義務を使った応手生成は、
-    // 受方の歩打が打歩詰めかどうかの判定には利用できない。
-    if world.position().turn().is_white() || !movement.is_pawn_drop() {
+    if !movement.is_pawn_drop() {
         return false;
     }
 
     let mut position = world.position().clone();
     position.do_move(movement);
-    let mut replies = Vec::new();
-    matches!(
-        advance_aux(&mut position, &AdvanceOptions::default(), &mut replies),
-        Ok(false)
-    ) && replies.is_empty()
+    is_legal_mate(&mut position)
+}
+
+#[cfg(test)]
+mod tests {
+    use fmrs_core::position::{position::PositionAux, Square};
+
+    use super::*;
+    use crate::{MoveIdentity, VariableLocation, VariablePiece};
+
+    fn world(sfen: &str) -> ConcreteWorld {
+        ConcreteWorld::new(PositionAux::from_sfen(sfen).unwrap(), Vec::new())
+    }
+
+    #[test]
+    fn help_selfmate_requires_mate_in_every_remaining_world() {
+        let mated = world("7rK/7g1/9/9/9/9/9/9/4k4 b - 1");
+        let not_mated = world("7rK/9/9/9/9/9/9/9/4k4 b - 1");
+
+        assert!(
+            HiddenState::new(vec![mated.clone(), mated], MateRule::HelpSelfmate).is_proven_mate()
+        );
+        assert!(!HiddenState::new(
+            vec![world("7rK/7g1/9/9/9/9/9/9/4k4 b - 1"), not_mated],
+            MateRule::HelpSelfmate
+        )
+        .is_proven_mate());
+    }
+
+    #[test]
+    fn black_can_move_when_reverse_check_exists_in_only_some_worlds() {
+        let variable = |kind| VariablePiece {
+            id: VariableId(1),
+            color: Color::WHITE,
+            kind,
+            location: VariableLocation::Board(Square::S88),
+        };
+        // 88金の世界だけ99玉が逆王手を受けている。88桂の世界では、
+        // 19飛を12へ動かして11玉へ王手できる。
+        let checked = ConcreteWorld::new(
+            PositionAux::from_sfen("8k/9/9/9/9/9/9/1g7/K7R b - 1").unwrap(),
+            vec![variable(Kind::Gold)],
+        );
+        let unchecked = ConcreteWorld::new(
+            PositionAux::from_sfen("8k/9/9/9/9/9/9/1n7/K7R b - 1").unwrap(),
+            vec![variable(Kind::Knight)],
+        );
+        let state = HiddenState::new(vec![checked, unchecked], MateRule::HelpSelfmate);
+        let checking_move = ObservedMove::Move {
+            identity: MoveIdentity::Known,
+            source: Square::S19,
+            destination: Square::S12,
+            promote: false,
+        };
+
+        assert!(state.observed_moves().contains(&checking_move));
+        assert_eq!(state.apply(checking_move).unwrap().world_count(), 1);
+    }
 }

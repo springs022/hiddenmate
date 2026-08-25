@@ -6,7 +6,7 @@ use fmrs_core::{
 };
 use serde::Deserialize;
 
-use crate::{VariableId, VariableProblem, VariableSpec};
+use crate::{MateRule, VariableId, VariableProblem, VariableSpec};
 
 /// CLI・Web UIで共有する覆面駒問題のJSON形式。
 #[derive(Debug, Clone, Deserialize)]
@@ -14,6 +14,8 @@ use crate::{VariableId, VariableProblem, VariableSpec};
 pub struct ProblemDocument {
     pub base_sfen: String,
     pub plies: usize,
+    #[serde(default)]
+    pub rule: MateRule,
     pub variables: Vec<VariableDocument>,
 }
 
@@ -43,11 +45,7 @@ impl ProblemDocument {
     pub fn into_problem(self) -> Result<VariableProblem> {
         let mut base = PositionAux::from_sfen(&self.base_sfen)
             .with_context(|| format!("SFENを解釈できません: {}", self.base_sfen))?;
-        base.set_turn(if self.plies % 2 == 0 {
-            Color::WHITE
-        } else {
-            Color::BLACK
-        });
+        base.set_turn(self.rule.initial_turn(self.plies));
         let variables = self
             .variables
             .into_iter()
@@ -56,6 +54,7 @@ impl ProblemDocument {
         Ok(VariableProblem {
             base_sfen: sfen::encode_position(&base),
             variables,
+            rule: self.rule,
         })
     }
 }
@@ -186,5 +185,38 @@ mod tests {
         let position = PositionAux::from_sfen(&problem.base_sfen).unwrap();
 
         assert_eq!(position.turn(), Color::WHITE);
+    }
+
+    #[test]
+    fn defaults_to_helpmate_rule_for_legacy_json() {
+        let document = ProblemDocument::from_json(
+            r#"{
+                "baseSfen": "9/9/k8/9/9/9/9/9/9 b - 1",
+                "plies": 1,
+                "variables": []
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(document.rule, MateRule::Helpmate);
+    }
+
+    #[test]
+    fn help_selfmate_uses_black_turn_for_even_plies() {
+        let document = ProblemDocument::from_json(
+            r#"{
+                "baseSfen": "8k/9/9/9/9/9/9/9/8K b - 1",
+                "plies": 4,
+                "rule": "helpSelfmate",
+                "variables": []
+            }"#,
+        )
+        .unwrap();
+
+        let problem = document.into_problem().unwrap();
+        let position = PositionAux::from_sfen(&problem.base_sfen).unwrap();
+
+        assert_eq!(problem.rule, MateRule::HelpSelfmate);
+        assert_eq!(position.turn(), Color::BLACK);
     }
 }
