@@ -153,6 +153,9 @@ mod hiddenmate_tests {
         let value: serde_json::Value = serde_json::from_str(&response).unwrap();
         let solutions = value["solutions"].as_array().unwrap();
 
-        assert!(solutions.is_empty());
+        assert!(solutions.len() > 1);
+        assert!(solutions
+            .iter()
+            .all(|solution| solution.as_array().unwrap().len() == 2));
     }
 }

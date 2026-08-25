@@ -2,7 +2,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use fmrs_core::{
     piece::{Color, Kind},
-    position::{advance::advance::advance_aux, AdvanceOptions, Movement},
+    position::{
+        advance::{advance::advance_aux, legal_movements},
+        AdvanceOptions, Movement,
+    },
 };
 
 use crate::{ConcreteWorld, ObservedMove, VariableId};
@@ -13,19 +16,27 @@ pub struct HiddenState {
     worlds: Vec<ConcreteWorld>,
     /// 一意に確定して普通の駒へ戻った覆面駒。
     resolved: BTreeMap<VariableId, Kind>,
+    /// 偶数手協力詰の受先初手では、王手されていなくても受方が着手できる。
+    free_white_move: bool,
 }
 
 impl HiddenState {
     pub(crate) fn new(worlds: Vec<ConcreteWorld>) -> Self {
-        Self::with_resolved(worlds, BTreeMap::new())
+        let free_white_move = worlds[0].position().turn().is_white();
+        Self::with_resolved(worlds, BTreeMap::new(), free_white_move)
     }
 
     fn with_resolved(
         worlds: Vec<ConcreteWorld>,
         resolved: BTreeMap<VariableId, Kind>,
+        free_white_move: bool,
     ) -> Self {
         debug_assert!(!worlds.is_empty());
-        let mut state = Self { worlds, resolved };
+        let mut state = Self {
+            worlds,
+            resolved,
+            free_white_move,
+        };
         state.reveal_resolved_variables();
         state
     }
@@ -84,7 +95,7 @@ impl HiddenState {
     pub fn observed_moves(&self) -> Vec<ObservedMove> {
         let mut result = BTreeSet::new();
         for world in &self.worlds {
-            for (observed, _) in concrete_moves(world) {
+            for (observed, _) in concrete_moves(world, self.free_white_move) {
                 result.insert(observed);
             }
         }
@@ -95,7 +106,7 @@ impl HiddenState {
     pub fn apply(&self, observed: ObservedMove) -> Option<Self> {
         let mut next_worlds = Vec::new();
         for world in &self.worlds {
-            for (candidate, movement) in concrete_moves(world) {
+            for (candidate, movement) in concrete_moves(world, self.free_white_move) {
                 if candidate == observed {
                     next_worlds.push(world.apply(observed, movement));
                 }
@@ -104,7 +115,11 @@ impl HiddenState {
         if next_worlds.is_empty() {
             None
         } else {
-            Some(Self::with_resolved(next_worlds, self.resolved.clone()))
+            Some(Self::with_resolved(
+                next_worlds,
+                self.resolved.clone(),
+                false,
+            ))
         }
     }
 
@@ -137,10 +152,12 @@ impl HiddenState {
     }
 }
 
-fn concrete_moves(world: &ConcreteWorld) -> Vec<(ObservedMove, Movement)> {
+fn concrete_moves(world: &ConcreteWorld, free_white_move: bool) -> Vec<(ObservedMove, Movement)> {
     let mut position = world.position().clone();
     let mut movements = Vec::new();
-    if advance_aux(&mut position, &AdvanceOptions::default(), &mut movements).is_err() {
+    if free_white_move {
+        legal_movements(&position, &mut movements);
+    } else if advance_aux(&mut position, &AdvanceOptions::default(), &mut movements).is_err() {
         return Vec::new();
     }
 
