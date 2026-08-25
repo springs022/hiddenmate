@@ -1,4 +1,7 @@
-use fmrs_core::piece::{Color, Kind};
+use fmrs_core::{
+    piece::{Color, Kind},
+    position::Square,
+};
 
 use crate::{DropIdentity, HiddenState, MoveIdentity, ObservedMove};
 
@@ -8,8 +11,14 @@ pub type Solution = Vec<ObservedMove>;
 pub fn format_solution_japanese(initial: &HiddenState, solution: &Solution) -> Vec<String> {
     let mut state = initial.clone();
     let mut result = Vec::with_capacity(solution.len());
+    let mut previous_destination = None;
     for &observed in solution {
-        result.push(format_observed_japanese(&state, observed));
+        result.push(format_observed_japanese(
+            &state,
+            observed,
+            previous_destination,
+        ));
+        previous_destination = Some(observed_destination(observed));
         state = state
             .apply(observed)
             .expect("解手順は現在の候補世界で適用できる");
@@ -17,7 +26,11 @@ pub fn format_solution_japanese(initial: &HiddenState, solution: &Solution) -> V
     result
 }
 
-fn format_observed_japanese(state: &HiddenState, observed: ObservedMove) -> String {
+fn format_observed_japanese(
+    state: &HiddenState,
+    observed: ObservedMove,
+    previous_destination: Option<Square>,
+) -> String {
     match observed {
         ObservedMove::Move {
             identity: MoveIdentity::Known,
@@ -25,16 +38,15 @@ fn format_observed_japanese(state: &HiddenState, observed: ObservedMove) -> Stri
             destination,
             promote,
         } => {
-            let kind = state.worlds()[0]
+            let (color, kind) = state.worlds()[0]
                 .position()
                 .get(source)
-                .expect("既知駒の移動元に駒がある")
-                .1;
+                .expect("既知駒の移動元に駒がある");
             format!(
                 "{}{}{}({})",
-                square_label(destination),
+                destination_label(destination, previous_destination),
                 japanese_kind(kind),
-                if promote { "成" } else { "" },
+                movement_suffix(promote, kind.can_promote(), color, source, destination),
                 square_label(source)
             )
         }
@@ -48,18 +60,27 @@ fn format_observed_japanese(state: &HiddenState, observed: ObservedMove) -> Stri
                 .variable(id)
                 .expect("覆面駒が存在する")
                 .color;
+            let can_promote = state
+                .worlds()
+                .iter()
+                .filter_map(|world| world.variable(id))
+                .any(|piece| piece.kind.can_promote());
             format!(
                 "{}{}{}({})",
-                square_label(destination),
+                destination_label(destination, previous_destination),
                 color_symbol(color),
-                if promote { "成" } else { "" },
+                movement_suffix(promote, can_promote, color, source, destination),
                 square_label(source)
             )
         }
         ObservedMove::Drop {
             identity: DropIdentity::Known(kind),
             destination,
-        } => format!("{}{}打", square_label(destination), japanese_kind(kind)),
+        } => format!(
+            "{}{}打",
+            destination_label(destination, previous_destination),
+            japanese_kind(kind)
+        ),
         ObservedMove::Drop {
             identity: DropIdentity::Variable(id),
             destination,
@@ -68,12 +89,58 @@ fn format_observed_japanese(state: &HiddenState, observed: ObservedMove) -> Stri
                 .variable(id)
                 .expect("覆面駒が存在する")
                 .color;
-            format!("{}{}打", square_label(destination), color_symbol(color))
+            format!(
+                "{}{}打",
+                destination_label(destination, previous_destination),
+                color_symbol(color)
+            )
         }
     }
 }
 
-fn square_label(square: fmrs_core::position::Square) -> String {
+fn observed_destination(observed: ObservedMove) -> Square {
+    match observed {
+        ObservedMove::Move { destination, .. } | ObservedMove::Drop { destination, .. } => {
+            destination
+        }
+    }
+}
+
+fn destination_label(destination: Square, previous_destination: Option<Square>) -> String {
+    if previous_destination == Some(destination) {
+        "同".to_string()
+    } else {
+        square_label(destination)
+    }
+}
+
+fn movement_suffix(
+    promote: bool,
+    can_promote: bool,
+    color: Color,
+    source: Square,
+    destination: Square,
+) -> &'static str {
+    if promote {
+        "成"
+    } else if can_promote
+        && (in_promotion_zone(source, color) || in_promotion_zone(destination, color))
+    {
+        "生"
+    } else {
+        ""
+    }
+}
+
+fn in_promotion_zone(square: Square, color: Color) -> bool {
+    if color.is_black() {
+        square.row() < 3
+    } else {
+        square.row() >= 6
+    }
+}
+
+fn square_label(square: Square) -> String {
     format!("{}{}", square.col() + 1, square.row() + 1)
 }
 
@@ -213,9 +280,10 @@ mod tests {
                     source: Square::S82,
                     destination: Square::S83,
                     promote: false,
-                }
+                },
+                None,
             ),
-            "83銀(82)"
+            "83銀生(82)"
         );
         assert_eq!(
             format_observed_japanese(
@@ -223,7 +291,8 @@ mod tests {
                 ObservedMove::Drop {
                     identity: DropIdentity::Known(Kind::Pawn),
                     destination: Square::S92,
-                }
+                },
+                None,
             ),
             "92歩打"
         );
@@ -239,7 +308,7 @@ mod tests {
             destination: Square::S84,
             promote: false,
         };
-        assert_eq!(format_observed_japanese(&black, observed), "84▲(64)");
-        assert_eq!(format_observed_japanese(&white, observed), "84△(64)");
+        assert_eq!(format_observed_japanese(&black, observed, None), "84▲(64)");
+        assert_eq!(format_observed_japanese(&white, observed, None), "84△(64)");
     }
 }

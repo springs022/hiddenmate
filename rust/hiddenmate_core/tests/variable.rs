@@ -334,7 +334,7 @@ fn includes_valid_three_ply_line_even_when_shorter_mates_exist() {
 
     assert_eq!(
         shorter,
-        vec!["82▲(42)", "82▲成(42)", "92▲(42)", "92▲成(42)"]
+        vec!["82▲生(42)", "82▲成(42)", "92▲生(42)", "92▲成(42)"]
     );
     let up_to_three = solve_exact(&state, 3, 100)
         .iter()
@@ -342,7 +342,7 @@ fn includes_valid_three_ply_line_even_when_shorter_mates_exist() {
         .collect::<Vec<_>>();
     assert!(up_to_three
         .iter()
-        .any(|solution| solution == "75▲成(42) 84歩打 84馬(75)"));
+        .any(|solution| solution == "75▲成(42) 84歩打 同馬(75)"));
 }
 
 #[test]
@@ -412,4 +412,51 @@ fn white_start_help_selfmate_allows_a_free_defender_move() {
         world.variable(VariableId(1)).unwrap().kind == Kind::Pawn
             && world.variable(VariableId(2)).unwrap().kind == Kind::King
     }));
+}
+
+#[test]
+fn japanese_notation_uses_same_and_nonpromotion() {
+    let state = VariableProblem {
+        base_sfen: "9/9/9/9/9/9/8k/9/9 w - 1".to_string(),
+        variables: vec![
+            VariableSpec {
+                id: VariableId(1),
+                color: Color::BLACK,
+                location: VariableLocation::Board(Square::S49),
+                candidates: fmrs_core::piece::KINDS.to_vec(),
+            },
+            VariableSpec {
+                id: VariableId(2),
+                color: Color::BLACK,
+                location: VariableLocation::Board(Square::S19),
+                candidates: fmrs_core::piece::KINDS.to_vec(),
+            },
+        ],
+        rule: MateRule::HelpSelfmate,
+    }
+    .enumerate()
+    .unwrap();
+    let solution = vec![
+        ObservedMove::Drop {
+            identity: DropIdentity::Known(Kind::Rook),
+            destination: Square::S31,
+        },
+        ObservedMove::Move {
+            identity: MoveIdentity::Variable(VariableId(1)),
+            source: Square::S49,
+            destination: Square::S39,
+            promote: false,
+        },
+        ObservedMove::Move {
+            identity: MoveIdentity::Known,
+            source: Square::S31,
+            destination: Square::S39,
+            promote: false,
+        },
+    ];
+
+    assert_eq!(
+        format_solution_japanese(&state, &solution),
+        vec!["31飛打", "39▲(49)", "同飛生(31)"]
+    );
 }
