@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787629478744,
+  "lastUpdate": 1787631448401,
   "repoUrl": "https://github.com/springs022/hiddenmate",
   "entries": {
     "Instruction Count (iai-callgrind)": [
@@ -1009,6 +1009,58 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/springs022/hiddenmate/commit/4ac7a6244bae44f2586ff24a7636e0345504dd99"
         },
         "date": 1787629473882,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "bench_black_advance",
+            "value": 51012,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_white_advance",
+            "value": 124170,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_reachable",
+            "value": 18369,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_attacker",
+            "value": 122124,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_canonicalize",
+            "value": 2258,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_near_mate",
+            "value": 439320149,
+            "unit": "Instructions"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "springs022",
+            "username": "springs022",
+            "email": "hit.and.miss.masayume@gmail.com"
+          },
+          "committer": {
+            "name": "springs022",
+            "username": "springs022",
+            "email": "hit.and.miss.masayume@gmail.com"
+          },
+          "id": "9dbb86a0e13bf8f2a2edcf895091902f5b712e54",
+          "message": "手数入力欄を一時的に空欄にできるよう修正",
+          "timestamp": "2026-08-25T04:00:11Z",
+          "url": "https://github.com/springs022/hiddenmate/commit/9dbb86a0e13bf8f2a2edcf895091902f5b712e54"
+        },
+        "date": 1787631447140,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
