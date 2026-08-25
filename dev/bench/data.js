@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787667606902,
+  "lastUpdate": 1787668690227,
   "repoUrl": "https://github.com/springs022/hiddenmate",
   "entries": {
     "Instruction Count (iai-callgrind)": [
@@ -1195,6 +1195,58 @@ window.BENCHMARK_DATA = {
           {
             "name": "bench_near_mate",
             "value": 435325916,
+            "unit": "Instructions"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "springs022",
+            "username": "springs022",
+            "email": "hit.and.miss.masayume@gmail.com"
+          },
+          "committer": {
+            "name": "springs022",
+            "username": "springs022",
+            "email": "hit.and.miss.masayume@gmail.com"
+          },
+          "id": "cdb22c66788c63453e695624884bf7a2ca0795c4",
+          "message": "棋譜表記に同と生を追加",
+          "timestamp": "2026-08-25T14:32:39Z",
+          "url": "https://github.com/springs022/hiddenmate/commit/cdb22c66788c63453e695624884bf7a2ca0795c4"
+        },
+        "date": 1787668686560,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "bench_black_advance",
+            "value": 50875,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_white_advance",
+            "value": 124145,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_reachable",
+            "value": 18369,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_attacker",
+            "value": 122124,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_canonicalize",
+            "value": 2258,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_near_mate",
+            "value": 435325904,
             "unit": "Instructions"
           }
         ]
