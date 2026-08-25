@@ -322,3 +322,20 @@ fn next_positions(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn solves_two_ply_problem_from_white_turn() {
+        let position =
+            PositionAux::from_sfen("4pp1p1/4P2PP/9/9/9/3OOOOOO/3O5/3O2k+p1/3O1PP2 w R 1").unwrap();
+
+        let solutions = low_mem_standard_solve(position, 10, true)
+            .unwrap()
+            .solutions();
+
+        assert!(solutions.iter().any(|solution| solution.len() == 2));
+    }
+}

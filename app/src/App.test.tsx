@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import App from "./App";
 
 beforeEach(() => localStorage.clear());
@@ -192,6 +192,21 @@ test("does not show nothing when an otherwise empty hand has a variable", () => 
 
   expect(attackHand?.textContent).toContain("▲V2");
   expect(attackHand?.textContent).not.toContain("なし");
+});
+
+test("shows a spinner before starting a variable solve", async () => {
+  jest.useFakeTimers();
+  render(<App />);
+
+  fireEvent.click(screen.getByRole("button", { name: "覆面駒を検討" }));
+
+  expect(screen.getByRole("status")).not.toBeNull();
+  expect(screen.getByRole("button", { name: "検討中…" })).not.toBeNull();
+
+  await act(async () => {
+    jest.runOnlyPendingTimers();
+  });
+  jest.useRealTimers();
 });
 
 test("treats a board double tap like a right click", () => {

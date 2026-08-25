@@ -7,6 +7,7 @@ import {
   Col,
   Form,
   Row,
+  Spinner,
   Table,
 } from "react-bootstrap";
 import {
@@ -398,9 +399,11 @@ export function VariableSolver() {
     setSavedPositions((current) => current.filter((_, i) => i !== index));
   };
 
-  const solve = () => {
+  const solve = async () => {
     setSolving(true);
     clearResult();
+    // 同期Wasm探索を始める前に、検討中表示をブラウザへ描画させる。
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
     try {
       if (inputMode === "form" && variables.length === 0) {
         throw new Error("覆面駒を1枚以上追加してください");
@@ -968,6 +971,11 @@ function VariableSolveControls(props: {
       >
         {props.solving ? "検討中…" : "覆面駒を検討"}
       </Button>
+      {props.solving && (
+        <Spinner animation="border" role="status">
+          <span className="visually-hidden">検討中...</span>
+        </Spinner>
+      )}
     </div>
   );
 }
