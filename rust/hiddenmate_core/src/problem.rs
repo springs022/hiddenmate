@@ -178,11 +178,6 @@ fn build_world(
     if position.turn().is_white() && black_checked {
         return None;
     }
-    // 協力自玉詰を白番から始める場合、白の初手は黒の王手への応手である。
-    if rule == MateRule::HelpSelfmate && position.turn().is_white() && !white_checked {
-        return None;
-    }
-
     Some(ConcreteWorld::new(position, variables))
 }
 

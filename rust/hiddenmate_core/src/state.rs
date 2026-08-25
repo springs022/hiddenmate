@@ -16,15 +16,14 @@ pub struct HiddenState {
     worlds: Vec<ConcreteWorld>,
     /// 一意に確定して普通の駒へ戻った覆面駒。
     resolved: BTreeMap<VariableId, Kind>,
-    /// 偶数手協力詰の受先初手では、王手されていなくても受方が着手できる。
-    /// 協力自玉詰の白番開始は通常の王手応手なので、この特例を適用しない。
+    /// 受先初手では、王手されていなくても受方が着手できる。
     free_white_move: bool,
     rule: MateRule,
 }
 
 impl HiddenState {
     pub(crate) fn new(worlds: Vec<ConcreteWorld>, rule: MateRule) -> Self {
-        let free_white_move = rule == MateRule::Helpmate && worlds[0].position().turn().is_white();
+        let free_white_move = worlds[0].position().turn().is_white();
         Self::with_resolved(worlds, BTreeMap::new(), free_white_move, rule)
     }
 

@@ -179,4 +179,38 @@ mod hiddenmate_tests {
 
         assert_eq!(lengths, vec![2, 4, 4, 4]);
     }
+
+    #[test]
+    fn white_start_help_selfmate_keeps_unchecked_variable_worlds() {
+        let json = r#"{
+            "baseSfen": "9/9/9/9/9/9/8k/9/9 b - 1",
+            "plies": 3,
+            "rule": "helpSelfmate",
+            "variables": [
+                { "id": 1, "color": "black", "square": "29" },
+                { "id": 2, "color": "black", "square": "19" }
+            ]
+        }"#;
+
+        let response = solve_variable_problem_json(json, 0).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&response).unwrap();
+
+        assert_eq!(value["worldCount"], 26);
+        assert_eq!(
+            value["candidates"][0]["kinds"].as_array().unwrap().len(),
+            14
+        );
+        assert_eq!(
+            value["candidates"][1]["kinds"].as_array().unwrap().len(),
+            14
+        );
+        assert!(value["candidates"][0]["kinds"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("P")));
+        assert!(value["candidates"][1]["kinds"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("K")));
+    }
 }

@@ -15,7 +15,7 @@ use crate::{
     piece::{Color, Kind},
     position::{
         advance::advance::advance_aux,
-        advance::{is_legal_mate, AdvanceOptions},
+        advance::{is_legal_mate, legal_movements, AdvanceOptions},
         position::{CachedPosition, PositionAux},
         previous, previous_with_digest, BitBoard, Movement,
     },
@@ -61,10 +61,6 @@ pub fn help_selfmate_solutions_within(
     if max_plies == 0 || solutions_upto == 0 {
         return Ok(Vec::new());
     }
-    if position.turn().is_white() && !position.checked_slow(Color::WHITE) {
-        bail!("White-to-move initial position is not checked");
-    }
-
     let mut context = BoundedSearch {
         target_plies: 0,
         solutions_upto,
@@ -95,9 +91,14 @@ impl BoundedSearch {
         }
 
         let mut movements = Vec::new();
-        let wrong_king_mated = advance_aux(position, &AdvanceOptions::default(), &mut movements)?;
-        if wrong_king_mated {
-            return Ok(());
+        if self.path.is_empty() && position.turn().is_white() {
+            legal_movements(position, &mut movements);
+        } else {
+            let wrong_king_mated =
+                advance_aux(position, &AdvanceOptions::default(), &mut movements)?;
+            if wrong_king_mated {
+                return Ok(());
+            }
         }
 
         for movement in movements {
@@ -144,6 +145,8 @@ pub struct HelpSelfmateSolver {
     mate_positions: Vec<PositionAux>,
     mate_position_digests: NoHashSet64,
     memo_white_turn: Memo,
+    /// 受先初手だけは王手応手に限らない。
+    free_white_frontier: bool,
     stone: Option<BitBoard>,
     silent: bool,
 }
@@ -161,6 +164,7 @@ impl HelpSelfmateSolver {
         let mut memo_white_turn = Memo::with_capacity(4096);
         let mut positions = Vec::new();
         let mut step = 0;
+        let free_white_frontier = position.turn().is_white();
 
         if position.turn().is_black() {
             let mut movements = Vec::new();
@@ -174,10 +178,6 @@ impl HelpSelfmateSolver {
             }
             step = 1;
         } else {
-            // 白番開始（受先）では初形自身が王手を受けている必要がある。
-            if !position.checked_slow(Color::WHITE) {
-                bail!("White-to-move initial position is not checked");
-            }
             memo_white_turn.contains_or_insert(position.digest(), 0);
             positions.push(CachedPosition::from_aux(&position));
         }
@@ -193,6 +193,7 @@ impl HelpSelfmateSolver {
             mate_positions: Vec::new(),
             mate_position_digests: NoHashSet64::default(),
             memo_white_turn,
+            free_white_frontier,
             stone,
             silent,
         })
@@ -227,6 +228,7 @@ impl HelpSelfmateSolver {
         }
 
         std::mem::swap(&mut self.positions, &mut self.next_positions);
+        self.free_white_frontier = false;
         self.step += 2;
         Ok(HelpSelfmateSolverStatus::Intermediate(self.step as u32))
     }
@@ -237,13 +239,17 @@ impl HelpSelfmateSolver {
         for cached in self.positions.iter() {
             let mut white_position = cached.to_aux(self.stone);
             self.movements.clear();
-            let wrong_king_mated = advance_aux(
-                &mut white_position,
-                &AdvanceOptions::default(),
-                &mut self.movements,
-            )?;
-            if wrong_king_mated {
-                continue;
+            if self.free_white_frontier {
+                legal_movements(&white_position, &mut self.movements);
+            } else {
+                let wrong_king_mated = advance_aux(
+                    &mut white_position,
+                    &AdvanceOptions::default(),
+                    &mut self.movements,
+                )?;
+                if wrong_king_mated {
+                    continue;
+                }
             }
 
             for white_movement in self.movements.iter() {
@@ -388,7 +394,7 @@ impl HelpSelfmateReconstructor {
             for white_unmove in white_unmoves {
                 let mut white_position = black_position.clone();
                 let white_move = white_position.undo_move(&white_unmove);
-                if !white_position.checked_slow(Color::WHITE)
+                if (step > 1 && !white_position.checked_slow(Color::WHITE))
                     || white_position.checked_slow(Color::BLACK)
                 {
                     continue;
@@ -502,6 +508,28 @@ mod tests {
             encoded.iter().any(|solution| solution == &["2b2a"]),
             "{encoded:?}"
         );
+    }
+
+    #[test]
+    fn solves_unchecked_white_to_move_help_selfmate() {
+        // 受先初手は王手応手でなくてもよい。白の2一飛打で黒玉が詰む。
+        let position = PositionAux::from_sfen("8K/7g1/9/9/9/9/9/9/4k4 w r 1").unwrap();
+        let reconstructor = help_selfmate_solve(position.clone(), 10, true).unwrap();
+        let encoded: Vec<Vec<String>> = reconstructor
+            .solutions()
+            .iter()
+            .map(|solution| solution.iter().map(sfen::encode_move).collect())
+            .collect();
+
+        assert_eq!(reconstructor.mate_in(), Some(1));
+        assert!(
+            encoded.iter().any(|solution| solution == &["R*2a"]),
+            "{encoded:?}"
+        );
+        assert!(help_selfmate_solutions_within(position, 1, 10)
+            .unwrap()
+            .iter()
+            .any(|solution| solution.len() == 1));
     }
 
     #[test]

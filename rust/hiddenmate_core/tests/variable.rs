@@ -377,14 +377,39 @@ fn help_selfmate_requires_exactly_one_attacker_king_in_every_world() {
 }
 
 #[test]
-fn white_start_help_selfmate_requires_an_initial_check() {
-    let error = VariableProblem {
-        base_sfen: "8k/9/9/9/9/9/9/9/8K w - 1".to_string(),
-        variables: vec![],
+fn white_start_help_selfmate_allows_a_free_defender_move() {
+    let state = VariableProblem {
+        base_sfen: "9/9/9/9/9/9/8k/9/9 w - 1".to_string(),
+        variables: vec![
+            VariableSpec {
+                id: VariableId(1),
+                color: Color::BLACK,
+                location: VariableLocation::Board(square(2, 9)),
+                candidates: fmrs_core::piece::KINDS.to_vec(),
+            },
+            VariableSpec {
+                id: VariableId(2),
+                color: Color::BLACK,
+                location: VariableLocation::Board(square(1, 9)),
+                candidates: fmrs_core::piece::KINDS.to_vec(),
+            },
+        ],
         rule: MateRule::HelpSelfmate,
     }
     .enumerate()
-    .unwrap_err();
+    .unwrap();
 
-    assert!(error.to_string().contains("割当がありません"));
+    assert_eq!(state.world_count(), 26);
+    assert_eq!(
+        state.candidates(VariableId(1)),
+        fmrs_core::piece::KINDS.into_iter().collect()
+    );
+    assert_eq!(
+        state.candidates(VariableId(2)),
+        fmrs_core::piece::KINDS.into_iter().collect()
+    );
+    assert!(state.worlds().iter().any(|world| {
+        world.variable(VariableId(1)).unwrap().kind == Kind::Pawn
+            && world.variable(VariableId(2)).unwrap().kind == Kind::King
+    }));
 }
