@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787615943091,
+  "lastUpdate": 1787617282253,
   "repoUrl": "https://github.com/springs022/hiddenmate",
   "entries": {
     "Instruction Count (iai-callgrind)": [
@@ -853,6 +853,58 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/springs022/hiddenmate/commit/75a05342598a2e89d8895c7f1a6a8f86ff4644cc"
         },
         "date": 1787615938493,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "bench_black_advance",
+            "value": 50875,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_white_advance",
+            "value": 124145,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_reachable",
+            "value": 18369,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_attacker",
+            "value": 122124,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_canonicalize",
+            "value": 2258,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_near_mate",
+            "value": 435330214,
+            "unit": "Instructions"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "springs022",
+            "username": "springs022",
+            "email": "hit.and.miss.masayume@gmail.com"
+          },
+          "committer": {
+            "name": "springs022",
+            "username": "springs022",
+            "email": "hit.and.miss.masayume@gmail.com"
+          },
+          "id": "2c0f016f071524c2edf534a6abda782565d123bb",
+          "message": "覆面駒検討の待機表示と受先テストを追加",
+          "timestamp": "2026-08-25T00:03:06Z",
+          "url": "https://github.com/springs022/hiddenmate/commit/2c0f016f071524c2edf534a6abda782565d123bb"
+        },
+        "date": 1787617280670,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
