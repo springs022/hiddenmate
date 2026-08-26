@@ -67,6 +67,10 @@ code {
   width: 98px;
 }
 
+.variable-solve-group + .variable-solve-group {
+  margin-top: 0.875rem;
+}
+
 .variable-board-wrap {
   width: fit-content;
   border: 3px solid #495057;

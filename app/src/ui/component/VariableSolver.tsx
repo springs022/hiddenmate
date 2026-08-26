@@ -985,7 +985,10 @@ function VariableSolveControls(props: {
   return (
     <div className="variable-solve-controls mb-3">
       {props.rule !== undefined && props.setRule && (
-        <Form.Group className="variable-rule mb-2" controlId="variable-rule">
+        <Form.Group
+          className="variable-solve-group variable-rule"
+          controlId="variable-rule"
+        >
           <Form.Label>ルール</Form.Label>
           <div className="d-flex gap-2 text-nowrap">
             <Form.Check
@@ -1013,7 +1016,7 @@ function VariableSolveControls(props: {
       )}
       {props.handVariableMode !== undefined && props.setHandVariableMode && (
         <Form.Group
-          className="variable-hand-mode mb-2"
+          className="variable-solve-group variable-hand-mode"
           controlId="variable-hand-mode"
         >
           <Form.Label>駒台の覆面駒</Form.Label>
@@ -1041,7 +1044,7 @@ function VariableSolveControls(props: {
           </div>
         </Form.Group>
       )}
-      <div className="variable-solve-actions d-flex flex-wrap align-items-end gap-2">
+      <div className="variable-solve-group variable-solve-actions d-flex flex-wrap align-items-end gap-2">
         {props.plies !== undefined && props.setPlies && (
           <Form.Group
             className="variable-control-number"
