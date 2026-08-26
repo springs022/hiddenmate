@@ -1077,7 +1077,7 @@ function VariableResult(props: { response: VariableSolveResponse }) {
       {props.response.solutions.length === 0 ? (
         <p>解なし</p>
       ) : (
-        <ol>
+        <ol className="variable-solution-list">
           {props.response.solutions.map((solution, index) => (
             <li key={`${index}-${solution.join("-")}`}>
               <code>
