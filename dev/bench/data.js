@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787755267880,
+  "lastUpdate": 1787756770786,
   "repoUrl": "https://github.com/springs022/hiddenmate",
   "entries": {
     "Instruction Count (iai-callgrind)": [
@@ -1633,6 +1633,58 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/springs022/hiddenmate/commit/7965e0e37bc07aceb5a2886d5600e843957f9fb7"
         },
         "date": 1787755261469,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "bench_black_advance",
+            "value": 50875,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_white_advance",
+            "value": 124145,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_reachable",
+            "value": 18369,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_attacker",
+            "value": 122124,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_canonicalize",
+            "value": 2258,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_near_mate",
+            "value": 435325904,
+            "unit": "Instructions"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "springs022",
+            "username": "springs022",
+            "email": "hit.and.miss.masayume@gmail.com"
+          },
+          "committer": {
+            "name": "springs022",
+            "username": "springs022",
+            "email": "hit.and.miss.masayume@gmail.com"
+          },
+          "id": "298cf4b262bfa1ce24e3e7fcbe5527918dcda2b8",
+          "message": "検討条件のグループ間に余白を追加",
+          "timestamp": "2026-08-26T14:48:19Z",
+          "url": "https://github.com/springs022/hiddenmate/commit/298cf4b262bfa1ce24e3e7fcbe5527918dcda2b8"
+        },
+        "date": 1787756768894,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
