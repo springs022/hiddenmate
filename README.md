@@ -65,4 +65,6 @@ npm run serve
 
 ## ライセンスと由来
 
-MIT Licenseです。基盤であるfmrsの著作権表示とライセンス条件を引き継ぎます。詳細は [LICENSE](LICENSE) と [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) を参照してください。
+HiddenMateは [fmrs](https://github.com/ogiekako/fmrs) を基にした派生ソフトウェアです。fmrsはKeigo Oka氏によりMIT Licenseで提供されています。本リポジトリではfmrsの著作権表示とMIT License本文を保持し、HiddenMateで追加した変更部分もMIT Licenseで提供します。
+
+ライセンス本文は [LICENSE](LICENSE)、fmrsおよび利用している第三者ソフトウェアの帰属とライセンスは [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) を参照してください。Web版の配布物にも、これらの文書と主要なランタイム依存ライブラリのライセンス本文を同梱しています。
