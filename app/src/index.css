@@ -82,6 +82,7 @@ code {
   min-width: 32px;
   max-width: 32px;
   overflow: hidden;
+  line-height: 1;
 }
 
 .variable-board-coordinate-shell {
