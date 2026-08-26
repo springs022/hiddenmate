@@ -234,6 +234,24 @@ test("selects help-selfmate and includes the rule in problem JSON", () => {
   ).toContain('"rule": "helpSelfmate"');
 });
 
+test("selects indistinguishable hand variables and includes the mode in problem JSON", () => {
+  render(<App />);
+
+  const distinguishable = screen.getByLabelText("区別する") as HTMLInputElement;
+  const indistinguishable = screen.getByLabelText(
+    "区別しない",
+  ) as HTMLInputElement;
+  expect(distinguishable.checked).toBe(true);
+
+  fireEvent.click(indistinguishable);
+  expect(indistinguishable.checked).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "JSON詳細編集" }));
+
+  expect(
+    (screen.getByLabelText("問題JSON") as HTMLTextAreaElement).value,
+  ).toContain('"handVariableMode": "indistinguishable"');
+});
+
 test("treats a board double tap like a right click", () => {
   render(<App />);
   const silverSquare = screen.getByLabelText("83");

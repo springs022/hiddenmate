@@ -26,6 +26,7 @@ import Hands from "./Hands";
 
 type InputMode = "form" | "json";
 type MateRule = "helpmate" | "helpSelfmate";
+type HandVariableMode = "distinguishable" | "indistinguishable";
 type VariableLocation = { type: "board"; square: string } | { type: "hand" };
 
 interface VariableDraft {
@@ -45,6 +46,7 @@ interface ProblemDocument {
   baseSfen: string;
   plies: number;
   rule?: MateRule;
+  handVariableMode?: HandVariableMode;
   variables: ProblemVariable[];
 }
 
@@ -114,10 +116,11 @@ function buildProblemJson(
   baseSfen: string,
   plies: number,
   rule: MateRule,
+  handVariableMode: HandVariableMode,
   variables: VariableDraft[],
 ): string {
   return JSON.stringify(
-    buildProblemDocument(baseSfen, plies, variables, rule),
+    buildProblemDocument(baseSfen, plies, variables, rule, handVariableMode),
     null,
     2,
   );
@@ -128,11 +131,13 @@ function buildProblemDocument(
   plies: number,
   variables: VariableDraft[],
   rule: MateRule = "helpmate",
+  handVariableMode: HandVariableMode = "distinguishable",
 ): ProblemDocument {
   return {
     baseSfen,
     plies,
     rule,
+    handVariableMode,
     variables: variables.map((variable) => ({
       id: variable.id,
       color: variable.color,
@@ -193,6 +198,7 @@ const initialProblem = buildProblemJson(
   initialBaseSfen,
   1,
   "helpmate",
+  "distinguishable",
   initialVariables,
 );
 
@@ -206,6 +212,8 @@ export function VariableSolver() {
   const [sfenInput, setSfenInput] = useState(initialBaseSfen);
   const [plies, setPlies] = useState(1);
   const [rule, setRule] = useState<MateRule>("helpmate");
+  const [handVariableMode, setHandVariableMode] =
+    useState<HandVariableMode>("distinguishable");
   const [variables, setVariables] = useState<VariableDraft[]>(initialVariables);
   const [selectedId, setSelectedId] = useState<number>(0);
   const [manualProblem, setManualProblem] = useState(initialProblem);
@@ -219,7 +227,13 @@ export function VariableSolver() {
 
   const baseSfen = baseSfenFromPosition(editorState.position);
   const selected = variables.find((variable) => variable.id === selectedId);
-  const generatedProblem = buildProblemJson(baseSfen, plies, rule, variables);
+  const generatedProblem = buildProblemJson(
+    baseSfen,
+    plies,
+    rule,
+    handVariableMode,
+    variables,
+  );
 
   useEffect(() => setSfenInput(baseSfen), [baseSfen]);
   useEffect(() => {
@@ -237,6 +251,11 @@ export function VariableSolver() {
   const clearResult = () => {
     setError(undefined);
     setResponse(undefined);
+  };
+
+  const changeHandVariableMode = (mode: HandVariableMode) => {
+    setHandVariableMode(mode);
+    clearResult();
   };
 
   const selectVariable = (id: number) => {
@@ -377,6 +396,7 @@ export function VariableSolver() {
     });
     setPlies(problem.plies);
     setRule(problem.rule ?? "helpmate");
+    setHandVariableMode(problem.handVariableMode ?? "distinguishable");
     const loaded = problem.variables.map(problemVariableToDraft);
     setVariables(loaded);
     setSelectedId(0);
@@ -400,7 +420,13 @@ export function VariableSolver() {
     const trimmed = name.trim() || baseSfen;
     const saved = {
       name: trimmed,
-      problem: buildProblemDocument(baseSfen, plies, variables, rule),
+      problem: buildProblemDocument(
+        baseSfen,
+        plies,
+        variables,
+        rule,
+        handVariableMode,
+      ),
     };
     setSavedPositions((current) =>
       [saved, ...current].slice(0, maxSavedPositions),
@@ -512,6 +538,8 @@ export function VariableSolver() {
                   setPlies={setPlies}
                   rule={rule}
                   setRule={setRule}
+                  handVariableMode={handVariableMode}
+                  setHandVariableMode={changeHandVariableMode}
                   maxSolutions={maxSolutions}
                   setMaxSolutions={setMaxSolutions}
                   solving={solving}
@@ -937,6 +965,8 @@ function VariableSolveControls(props: {
   setPlies?: (plies: number) => void;
   rule?: MateRule;
   setRule?: (rule: MateRule) => void;
+  handVariableMode?: HandVariableMode;
+  setHandVariableMode?: (mode: HandVariableMode) => void;
   maxSolutions: number;
   setMaxSolutions: (maxSolutions: number) => void;
   solving: boolean;
@@ -976,6 +1006,36 @@ function VariableSolveControls(props: {
               label="協力自玉詰"
               checked={props.rule === "helpSelfmate"}
               onChange={() => props.setRule!("helpSelfmate")}
+              disabled={props.solving}
+            />
+          </div>
+        </Form.Group>
+      )}
+      {props.handVariableMode !== undefined && props.setHandVariableMode && (
+        <Form.Group
+          className="variable-hand-mode mb-2"
+          controlId="variable-hand-mode"
+        >
+          <Form.Label>駒台の覆面駒</Form.Label>
+          <div className="d-flex gap-2 text-nowrap">
+            <Form.Check
+              inline
+              type="radio"
+              name="variable-hand-mode"
+              id="variable-hand-mode-distinguishable"
+              label="区別する"
+              checked={props.handVariableMode === "distinguishable"}
+              onChange={() => props.setHandVariableMode!("distinguishable")}
+              disabled={props.solving}
+            />
+            <Form.Check
+              inline
+              type="radio"
+              name="variable-hand-mode"
+              id="variable-hand-mode-indistinguishable"
+              label="区別しない"
+              checked={props.handVariableMode === "indistinguishable"}
+              onChange={() => props.setHandVariableMode!("indistinguishable")}
               disabled={props.solving}
             />
           </div>
@@ -1156,6 +1216,9 @@ function isProblemDocument(value: unknown): value is ProblemDocument {
     (document.rule === undefined ||
       document.rule === "helpmate" ||
       document.rule === "helpSelfmate") &&
+    (document.handVariableMode === undefined ||
+      document.handVariableMode === "distinguishable" ||
+      document.handVariableMode === "indistinguishable") &&
     Array.isArray(document.variables) &&
     document.variables.every((variable) => {
       if (!variable || typeof variable !== "object") {

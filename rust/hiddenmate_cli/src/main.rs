@@ -25,7 +25,8 @@ fn main() -> Result<()> {
         .with_context(|| format!("問題ファイルを読めません: {}", arguments.problem.display()))?;
     let document = ProblemDocument::from_json(&json)?;
     let plies = document.plies;
-    let state = document.into_problem()?.enumerate()?;
+    let (problem, hand_variable_mode) = document.into_problem_with_hand_variable_mode()?;
+    let state = problem.enumerate_with_hand_variable_mode(hand_variable_mode)?;
 
     println!("初形候補世界: {}", state.world_count());
     for (id, candidates) in state.all_candidates() {

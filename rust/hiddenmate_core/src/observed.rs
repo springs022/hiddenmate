@@ -8,6 +8,8 @@ use crate::VariableId;
 pub enum MoveIdentity {
     Known,
     Variable(VariableId),
+    /// 駒台で個体を区別せずに打たれ、元のIDが観測できない覆面駒。
+    AnonymousVariable,
 }
 
 /// 駒打ちで見えている駒の情報。
@@ -15,6 +17,8 @@ pub enum MoveIdentity {
 pub enum DropIdentity {
     Known(Kind),
     Variable(VariableId),
+    /// 同じ駒台のどの覆面駒を選んだか観測できない駒打ち。
+    AnonymousVariable,
 }
 
 /// 棋譜から観測できる着手。
@@ -71,6 +75,7 @@ fn move_identity_label(identity: MoveIdentity) -> String {
     match identity {
         MoveIdentity::Known => String::new(),
         MoveIdentity::Variable(VariableId(id)) => format!("V{id}:"),
+        MoveIdentity::AnonymousVariable => "V:".to_string(),
     }
 }
 
@@ -78,6 +83,7 @@ fn drop_identity_label(identity: DropIdentity) -> String {
     match identity {
         DropIdentity::Known(kind) => kind_label(kind).to_string(),
         DropIdentity::Variable(VariableId(id)) => format!("V{id}"),
+        DropIdentity::AnonymousVariable => "V".to_string(),
     }
 }
 

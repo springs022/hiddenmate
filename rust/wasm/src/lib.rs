@@ -71,7 +71,8 @@ pub fn solve_variable_problem(json: &str, max_solutions: u32) -> Result<String, 
 fn solve_variable_problem_json(json: &str, max_solutions: usize) -> anyhow::Result<String> {
     let document = ProblemDocument::from_json(json)?;
     let plies = document.plies;
-    let state = document.into_problem()?.enumerate()?;
+    let (problem, hand_variable_mode) = document.into_problem_with_hand_variable_mode()?;
+    let state = problem.enumerate_with_hand_variable_mode(hand_variable_mode)?;
     let candidates = state
         .all_candidates()
         .into_iter()

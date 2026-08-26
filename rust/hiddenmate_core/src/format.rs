@@ -6,7 +6,7 @@ use fmrs_core::{
 };
 use serde::Deserialize;
 
-use crate::{MateRule, VariableId, VariableProblem, VariableSpec};
+use crate::{HandVariableMode, MateRule, VariableId, VariableProblem, VariableSpec};
 
 /// CLI・Web UIで共有する覆面駒問題のJSON形式。
 #[derive(Debug, Clone, Deserialize)]
@@ -16,6 +16,8 @@ pub struct ProblemDocument {
     pub plies: usize,
     #[serde(default)]
     pub rule: MateRule,
+    #[serde(default)]
+    pub hand_variable_mode: HandVariableMode,
     pub variables: Vec<VariableDocument>,
 }
 
@@ -43,6 +45,13 @@ impl ProblemDocument {
     }
 
     pub fn into_problem(self) -> Result<VariableProblem> {
+        self.into_problem_with_hand_variable_mode()
+            .map(|(problem, _)| problem)
+    }
+
+    pub fn into_problem_with_hand_variable_mode(
+        self,
+    ) -> Result<(VariableProblem, HandVariableMode)> {
         let mut base = PositionAux::from_sfen(&self.base_sfen)
             .with_context(|| format!("SFENを解釈できません: {}", self.base_sfen))?;
         base.set_turn(self.rule.initial_turn(self.plies));
@@ -51,11 +60,14 @@ impl ProblemDocument {
             .into_iter()
             .map(VariableDocument::into_spec)
             .collect::<Result<Vec<_>>>()?;
-        Ok(VariableProblem {
-            base_sfen: sfen::encode_position(&base),
-            variables,
-            rule: self.rule,
-        })
+        Ok((
+            VariableProblem {
+                base_sfen: sfen::encode_position(&base),
+                variables,
+                rule: self.rule,
+            },
+            self.hand_variable_mode,
+        ))
     }
 }
 
@@ -199,6 +211,33 @@ mod tests {
         .unwrap();
 
         assert_eq!(document.rule, MateRule::Helpmate);
+        assert_eq!(
+            document.hand_variable_mode,
+            HandVariableMode::Distinguishable
+        );
+    }
+
+    #[test]
+    fn parses_indistinguishable_hand_variable_mode() {
+        let document = ProblemDocument::from_json(
+            r#"{
+                "baseSfen": "9/9/k8/9/9/9/9/9/9 b - 1",
+                "plies": 1,
+                "handVariableMode": "indistinguishable",
+                "variables": []
+            }"#,
+        )
+        .unwrap();
+
+        let (problem, mode) = document.into_problem_with_hand_variable_mode().unwrap();
+        assert_eq!(mode, HandVariableMode::Indistinguishable);
+        assert_eq!(
+            problem
+                .enumerate_with_hand_variable_mode(mode)
+                .unwrap()
+                .hand_variable_mode(),
+            HandVariableMode::Indistinguishable
+        );
     }
 
     #[test]

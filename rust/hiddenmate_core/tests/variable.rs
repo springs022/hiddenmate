@@ -3,12 +3,112 @@ use fmrs_core::{
     position::Square,
 };
 use hiddenmate_core::{
-    format_solution_japanese, solve_exact, DropIdentity, MateRule, MoveIdentity, ObservedMove,
-    VariableId, VariableLocation, VariableProblem, VariableSpec,
+    format_solution_japanese, solve_exact, DropIdentity, HandVariableMode, MateRule, MoveIdentity,
+    ObservedMove, VariableId, VariableLocation, VariableProblem, VariableSpec,
 };
 
 fn square(file: usize, rank: usize) -> Square {
     Square::new(file - 1, rank - 1)
+}
+
+#[test]
+fn indistinguishable_hand_variables_branch_then_resolve_which_one_remains() {
+    // V1（金・銀）とV2（飛・香）を区別せず55へ打つ。54玉から43玉の後、
+    // 55の覆面駒を44へ動かせるのはV1だけなので、駒台に残った駒がV2と確定する。
+    let problem = VariableProblem {
+        base_sfen: "9/9/9/4k4/9/9/9/9/9 b - 1".to_string(),
+        rule: MateRule::Helpmate,
+        variables: vec![
+            VariableSpec {
+                id: VariableId(1),
+                color: Color::BLACK,
+                location: VariableLocation::Hand(Color::BLACK),
+                candidates: vec![Kind::Gold, Kind::Silver],
+            },
+            VariableSpec {
+                id: VariableId(2),
+                color: Color::BLACK,
+                location: VariableLocation::Hand(Color::BLACK),
+                candidates: vec![Kind::Rook, Kind::Lance],
+            },
+        ],
+    };
+
+    let distinguishable = problem.clone().enumerate().unwrap();
+    let distinguishable_drops = distinguishable
+        .observed_moves()
+        .into_iter()
+        .filter(|observed| {
+            matches!(
+                observed,
+                ObservedMove::Drop {
+                    destination: Square::S55,
+                    ..
+                }
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(distinguishable_drops.len(), 2);
+    assert!(distinguishable_drops.iter().any(|observed| matches!(
+        observed,
+        ObservedMove::Drop {
+            identity: DropIdentity::Variable(VariableId(1)),
+            ..
+        }
+    )));
+    assert!(distinguishable_drops.iter().any(|observed| matches!(
+        observed,
+        ObservedMove::Drop {
+            identity: DropIdentity::Variable(VariableId(2)),
+            ..
+        }
+    )));
+
+    let state = problem
+        .enumerate_with_hand_variable_mode(HandVariableMode::Indistinguishable)
+        .unwrap();
+    let anonymous_drop = ObservedMove::Drop {
+        identity: DropIdentity::AnonymousVariable,
+        destination: Square::S55,
+    };
+    assert!(state.observed_moves().contains(&anonymous_drop));
+
+    let after_drop = state.apply(anonymous_drop).unwrap();
+    assert_eq!(after_drop.world_count(), 8);
+    assert!(after_drop.worlds().iter().any(|world| {
+        world.variable(VariableId(1)).unwrap().location == VariableLocation::Board(Square::S55)
+    }));
+    assert!(after_drop.worlds().iter().any(|world| {
+        world.variable(VariableId(2)).unwrap().location == VariableLocation::Board(Square::S55)
+    }));
+
+    let king_move = ObservedMove::Move {
+        identity: MoveIdentity::Known,
+        source: Square::S54,
+        destination: Square::S43,
+        promote: false,
+    };
+    let after_king_move = after_drop.apply(king_move).unwrap();
+    let anonymous_move = ObservedMove::Move {
+        identity: MoveIdentity::AnonymousVariable,
+        source: Square::S55,
+        destination: Square::S44,
+        promote: false,
+    };
+    let inferred = after_king_move.apply(anonymous_move).unwrap();
+
+    assert_eq!(inferred.world_count(), 4);
+    assert_eq!(
+        inferred.candidates(VariableId(2)),
+        [Kind::Lance, Kind::Rook].into_iter().collect()
+    );
+    assert!(inferred.worlds().iter().all(|world| {
+        world.variable(VariableId(2)).unwrap().location == VariableLocation::Hand(Color::BLACK)
+    }));
+    assert_eq!(
+        format_solution_japanese(&state, &vec![anonymous_drop, king_move, anonymous_move]),
+        vec!["55▲打", "43玉(54)", "44▲(55)"]
+    );
 }
 
 #[test]

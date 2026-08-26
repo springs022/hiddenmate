@@ -6,7 +6,7 @@ use fmrs_core::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{DropIdentity, MoveIdentity, ObservedMove};
+use crate::{DropIdentity, HandVariableMode, MoveIdentity, ObservedMove};
 
 /// 覆面駒を手順中も追跡するための安定した識別子。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -60,7 +60,11 @@ impl ConcreteWorld {
         self.variables.remove(&id);
     }
 
-    pub(crate) fn observed_variants(&self, movement: &Movement) -> Vec<ObservedMove> {
+    pub(crate) fn observed_variants(
+        &self,
+        movement: &Movement,
+        hand_variable_mode: HandVariableMode,
+    ) -> Vec<(ObservedMove, Option<VariableId>)> {
         match *movement {
             Movement::Move {
                 source,
@@ -68,17 +72,21 @@ impl ConcreteWorld {
                 promote,
                 ..
             } => {
-                let identity = self
-                    .variable_on_board(source)
-                    .map_or(MoveIdentity::Known, |piece| {
-                        MoveIdentity::Variable(piece.id)
-                    });
-                vec![ObservedMove::Move {
-                    identity,
-                    source,
-                    destination: dest,
-                    promote,
-                }]
+                let identity =
+                    self.variable_on_board(source)
+                        .map_or(MoveIdentity::Known, |piece| match hand_variable_mode {
+                            HandVariableMode::Distinguishable => MoveIdentity::Variable(piece.id),
+                            HandVariableMode::Indistinguishable => MoveIdentity::AnonymousVariable,
+                        });
+                vec![(
+                    ObservedMove::Move {
+                        identity,
+                        source,
+                        destination: dest,
+                        promote,
+                    },
+                    None,
+                )]
             }
             Movement::Drop(destination, kind) => {
                 let turn = self.position.turn();
@@ -90,9 +98,21 @@ impl ConcreteWorld {
                             && piece.kind == kind
                             && piece.location == VariableLocation::Hand(turn)
                     })
-                    .map(|piece| ObservedMove::Drop {
-                        identity: DropIdentity::Variable(piece.id),
-                        destination,
+                    .map(|piece| {
+                        (
+                            ObservedMove::Drop {
+                                identity: match hand_variable_mode {
+                                    HandVariableMode::Distinguishable => {
+                                        DropIdentity::Variable(piece.id)
+                                    }
+                                    HandVariableMode::Indistinguishable => {
+                                        DropIdentity::AnonymousVariable
+                                    }
+                                },
+                                destination,
+                            },
+                            Some(piece.id),
+                        )
                     })
                     .collect();
 
@@ -100,23 +120,40 @@ impl ConcreteWorld {
                 let total_count = self.position.hands().count(turn, kind);
                 let mut result = variables;
                 if total_count > variable_count {
-                    result.push(ObservedMove::Drop {
-                        identity: DropIdentity::Known(kind),
-                        destination,
-                    });
+                    result.push((
+                        ObservedMove::Drop {
+                            identity: DropIdentity::Known(kind),
+                            destination,
+                        },
+                        None,
+                    ));
                 }
                 result
             }
         }
     }
 
-    pub(crate) fn apply(&self, observed: ObservedMove, movement: Movement) -> Self {
+    pub(crate) fn apply(
+        &self,
+        observed: ObservedMove,
+        movement: Movement,
+        selected_variable: Option<VariableId>,
+    ) -> Self {
         let mover = self.position.turn();
         let captured_variable = match observed {
             ObservedMove::Move { destination, .. } => {
                 self.variable_on_board(destination).map(|piece| piece.id)
             }
             ObservedMove::Drop { .. } => None,
+        };
+
+        let anonymous_moved_variable = match observed {
+            ObservedMove::Move {
+                identity: MoveIdentity::AnonymousVariable,
+                source,
+                ..
+            } => self.variable_on_board(source).map(|piece| piece.id),
+            _ => None,
         };
 
         let mut next = self.clone();
@@ -148,10 +185,34 @@ impl ConcreteWorld {
                 }
                 moved.location = VariableLocation::Board(destination);
             }
+            ObservedMove::Move {
+                identity: MoveIdentity::AnonymousVariable,
+                destination,
+                promote,
+                ..
+            } => {
+                let id = anonymous_moved_variable.expect("動かした覆面駒が盤上に存在する");
+                let moved = next
+                    .variables
+                    .get_mut(&id)
+                    .expect("動かした覆面駒が存在する");
+                if promote {
+                    moved.kind = moved.kind.promote().expect("合法な成である");
+                }
+                moved.location = VariableLocation::Board(destination);
+            }
             ObservedMove::Drop {
                 identity: DropIdentity::Variable(id),
                 destination,
             } => {
+                let dropped = next.variables.get_mut(&id).expect("打った覆面駒が存在する");
+                dropped.location = VariableLocation::Board(destination);
+            }
+            ObservedMove::Drop {
+                identity: DropIdentity::AnonymousVariable,
+                destination,
+            } => {
+                let id = selected_variable.expect("匿名で打った覆面駒の内部IDがある");
                 let dropped = next.variables.get_mut(&id).expect("打った覆面駒が存在する");
                 dropped.location = VariableLocation::Board(destination);
             }
@@ -203,6 +264,7 @@ mod tests {
                 promote: false,
                 capture_kind_hint: None,
             },
+            None,
         );
         let piece = captured.variable(VariableId(3)).unwrap();
         assert_eq!(piece.color, Color::BLACK);
@@ -217,6 +279,7 @@ mod tests {
                 destination: Square::S44,
             },
             Movement::Drop(Square::S44, Kind::Silver),
+            None,
         );
         assert_eq!(
             dropped.variable(VariableId(3)).unwrap().location,

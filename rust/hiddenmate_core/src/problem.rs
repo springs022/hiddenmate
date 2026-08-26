@@ -6,7 +6,10 @@ use fmrs_core::{
     position::position::PositionAux,
 };
 
-use crate::{ConcreteWorld, HiddenState, MateRule, VariableId, VariableLocation, VariablePiece};
+use crate::{
+    ConcreteWorld, HandVariableMode, HiddenState, MateRule, VariableId, VariableLocation,
+    VariablePiece,
+};
 
 const MAX_VARIABLES: usize = 6;
 
@@ -33,6 +36,13 @@ pub struct VariableProblem {
 
 impl VariableProblem {
     pub fn enumerate(self) -> Result<HiddenState> {
+        self.enumerate_with_hand_variable_mode(HandVariableMode::Distinguishable)
+    }
+
+    pub fn enumerate_with_hand_variable_mode(
+        self,
+        hand_variable_mode: HandVariableMode,
+    ) -> Result<HiddenState> {
         let base = PositionAux::from_sfen(&self.base_sfen)
             .with_context(|| format!("SFENを解釈できません: {}", self.base_sfen))?;
 
@@ -53,7 +63,11 @@ impl VariableProblem {
         if worlds.is_empty() {
             bail!("初形の合法性と矛盾しない覆面駒の割当がありません");
         }
-        Ok(HiddenState::new(worlds, self.rule))
+        Ok(HiddenState::new_with_hand_variable_mode(
+            worlds,
+            self.rule,
+            hand_variable_mode,
+        ))
     }
 }
 

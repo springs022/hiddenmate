@@ -12,6 +12,17 @@ pub enum MateRule {
     HelpSelfmate,
 }
 
+/// 同じ駒台にある複数の覆面駒を着手時に個体識別できるか。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum HandVariableMode {
+    /// V1、V2のように個体を選んで打つ現行ルール。
+    #[default]
+    Distinguishable,
+    /// どの個体を打ったかは観測できず、可能な個体をすべて残す。
+    Indistinguishable,
+}
+
 impl MateRule {
     pub(crate) fn terminal_turn(self) -> Color {
         match self {

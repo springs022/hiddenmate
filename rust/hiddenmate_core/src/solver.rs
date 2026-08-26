@@ -68,6 +68,24 @@ fn format_observed_japanese(
                 square_label(source)
             )
         }
+        ObservedMove::Move {
+            identity: MoveIdentity::AnonymousVariable,
+            source,
+            destination,
+            promote,
+        } => {
+            let (color, _) = state.worlds()[0]
+                .position()
+                .get(source)
+                .expect("覆面駒の移動元に駒がある");
+            format!(
+                "{}{}{}({})",
+                destination_label(destination, previous_destination),
+                color_symbol(color),
+                if promote { "成" } else { "" },
+                square_label(source)
+            )
+        }
         ObservedMove::Drop {
             identity: DropIdentity::Known(kind),
             destination,
@@ -90,6 +108,14 @@ fn format_observed_japanese(
                 color_symbol(color)
             )
         }
+        ObservedMove::Drop {
+            identity: DropIdentity::AnonymousVariable,
+            destination,
+        } => format!(
+            "{}{}打",
+            destination_label(destination, previous_destination),
+            color_symbol(state.turn())
+        ),
     }
 }
 

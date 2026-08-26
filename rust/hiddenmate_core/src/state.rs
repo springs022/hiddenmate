@@ -8,7 +8,7 @@ use fmrs_core::{
     },
 };
 
-use crate::{ConcreteWorld, MateRule, ObservedMove, VariableId};
+use crate::{ConcreteWorld, HandVariableMode, MateRule, ObservedMove, VariableId};
 
 /// これまでの観測と矛盾しない具体世界の集合。
 #[derive(Clone, Debug)]
@@ -19,12 +19,28 @@ pub struct HiddenState {
     /// 受先初手では、王手されていなくても受方が着手できる。
     free_white_move: bool,
     rule: MateRule,
+    hand_variable_mode: HandVariableMode,
 }
 
 impl HiddenState {
+    #[cfg(test)]
     pub(crate) fn new(worlds: Vec<ConcreteWorld>, rule: MateRule) -> Self {
+        Self::new_with_hand_variable_mode(worlds, rule, HandVariableMode::Distinguishable)
+    }
+
+    pub(crate) fn new_with_hand_variable_mode(
+        worlds: Vec<ConcreteWorld>,
+        rule: MateRule,
+        hand_variable_mode: HandVariableMode,
+    ) -> Self {
         let free_white_move = worlds[0].position().turn().is_white();
-        Self::with_resolved(worlds, BTreeMap::new(), free_white_move, rule)
+        Self::with_resolved(
+            worlds,
+            BTreeMap::new(),
+            free_white_move,
+            rule,
+            hand_variable_mode,
+        )
     }
 
     fn with_resolved(
@@ -32,6 +48,7 @@ impl HiddenState {
         resolved: BTreeMap<VariableId, Kind>,
         free_white_move: bool,
         rule: MateRule,
+        hand_variable_mode: HandVariableMode,
     ) -> Self {
         debug_assert!(!worlds.is_empty());
         let mut state = Self {
@@ -39,6 +56,7 @@ impl HiddenState {
             resolved,
             free_white_move,
             rule,
+            hand_variable_mode,
         };
         state.reveal_resolved_variables();
         state
@@ -84,6 +102,10 @@ impl HiddenState {
         self.rule
     }
 
+    pub fn hand_variable_mode(&self) -> HandVariableMode {
+        self.hand_variable_mode
+    }
+
     pub fn candidates(&self, id: VariableId) -> BTreeSet<Kind> {
         if let Some(&kind) = self.resolved.get(&id) {
             return [kind].into_iter().collect();
@@ -102,7 +124,9 @@ impl HiddenState {
     pub fn observed_moves(&self) -> Vec<ObservedMove> {
         let mut result = BTreeSet::new();
         for world in &self.worlds {
-            for (observed, _) in concrete_moves(world, self.free_white_move) {
+            for (observed, _, _) in
+                concrete_moves(world, self.free_white_move, self.hand_variable_mode)
+            {
                 result.insert(observed);
             }
         }
@@ -113,9 +137,11 @@ impl HiddenState {
     pub fn apply(&self, observed: ObservedMove) -> Option<Self> {
         let mut next_worlds = Vec::new();
         for world in &self.worlds {
-            for (candidate, movement) in concrete_moves(world, self.free_white_move) {
+            for (candidate, movement, selected_variable) in
+                concrete_moves(world, self.free_white_move, self.hand_variable_mode)
+            {
                 if candidate == observed {
-                    next_worlds.push(world.apply(observed, movement));
+                    next_worlds.push(world.apply(observed, movement, selected_variable));
                 }
             }
         }
@@ -127,6 +153,7 @@ impl HiddenState {
                 self.resolved.clone(),
                 false,
                 self.rule,
+                self.hand_variable_mode,
             ))
         }
     }
@@ -167,7 +194,11 @@ impl HiddenState {
     }
 }
 
-fn concrete_moves(world: &ConcreteWorld, free_white_move: bool) -> Vec<(ObservedMove, Movement)> {
+fn concrete_moves(
+    world: &ConcreteWorld,
+    free_white_move: bool,
+    hand_variable_mode: HandVariableMode,
+) -> Vec<(ObservedMove, Movement, Option<VariableId>)> {
     let mut position = world.position().clone();
     let mut movements = Vec::new();
     if free_white_move {
@@ -181,9 +212,9 @@ fn concrete_moves(world: &ConcreteWorld, free_white_move: bool) -> Vec<(Observed
         .filter(|movement| !is_illegal_pawn_drop_mate(world, movement))
         .flat_map(|movement| {
             world
-                .observed_variants(&movement)
+                .observed_variants(&movement, hand_variable_mode)
                 .into_iter()
-                .map(move |observed| (observed, movement))
+                .map(move |(observed, selected_variable)| (observed, movement, selected_variable))
         })
         .collect()
 }
