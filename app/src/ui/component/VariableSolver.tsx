@@ -435,7 +435,7 @@ export function VariableSolver() {
   return (
     <Card className="mb-4">
       <Card.Header as="h2" className="h5 mb-0">
-        覆面駒入りの協力詰／協力自玉詰
+        覆面駒
       </Card.Header>
       <Card.Body>
         <ButtonGroup className="mb-3" aria-label="問題入力方法">

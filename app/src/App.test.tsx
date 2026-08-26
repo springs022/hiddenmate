@@ -7,9 +7,7 @@ beforeEach(() => localStorage.clear());
 test("renders HiddenMate title", () => {
   render(<App />);
   expect(screen.getByRole("heading", { name: "HiddenMate" })).not.toBeNull();
-  expect(
-    screen.getByRole("heading", { name: "覆面駒入りの協力詰／協力自玉詰" }),
-  ).not.toBeNull();
+  expect(screen.getByRole("heading", { name: "覆面駒" })).not.toBeNull();
   expect(screen.getByRole("button", { name: "盤面・フォーム" })).not.toBeNull();
   expect(screen.getByLabelText("通常駒のbase SFEN")).not.toBeNull();
   expect(screen.queryByText("受方駒台")).toBeNull();
