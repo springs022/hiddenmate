@@ -2,6 +2,8 @@ import { ReactNode, useEffect, useRef } from "react";
 import { SELECTED_COLOR } from "../constants";
 import * as model from "../../model";
 
+const TOUCH_MOVE_THRESHOLD_PX = 10;
+
 export default function Board(props: {
   pieces: model.Board;
   selected: [number, number] | undefined;
@@ -50,6 +52,8 @@ function Square(props: {
   const lastTouchAt = useRef<number | undefined>(undefined);
   const singleTapTimer = useRef<number | undefined>(undefined);
   const suppressClickUntil = useRef(0);
+  const touchStart = useRef<{ x: number; y: number } | undefined>(undefined);
+  const touchMoved = useRef(false);
 
   useEffect(
     () => () => {
@@ -60,17 +64,56 @@ function Square(props: {
     [],
   );
 
+  const cancelPendingTap = () => {
+    if (singleTapTimer.current !== undefined) {
+      window.clearTimeout(singleTapTimer.current);
+      singleTapTimer.current = undefined;
+    }
+    lastTouchAt.current = undefined;
+  };
+
+  const startTouch = (event: React.TouchEvent<HTMLTableCellElement>) => {
+    const touch = event.touches[0];
+    touchStart.current = touch
+      ? { x: touch.clientX, y: touch.clientY }
+      : undefined;
+    touchMoved.current = event.touches.length !== 1;
+  };
+
+  const moveTouch = (event: React.TouchEvent<HTMLTableCellElement>) => {
+    const start = touchStart.current;
+    const touch = event.touches[0];
+    if (!start || !touch) {
+      touchMoved.current = true;
+      return;
+    }
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (dx * dx + dy * dy > TOUCH_MOVE_THRESHOLD_PX ** 2) {
+      touchMoved.current = true;
+    }
+  };
+
+  const cancelTouch = () => {
+    touchStart.current = undefined;
+    touchMoved.current = false;
+    suppressClickUntil.current = Date.now() + 500;
+    cancelPendingTap();
+  };
+
   const touchEnd = (event: React.TouchEvent<HTMLTableCellElement>) => {
     event.preventDefault();
     event.stopPropagation();
     const now = Date.now();
     suppressClickUntil.current = now + 500;
+    touchStart.current = undefined;
+    if (touchMoved.current) {
+      touchMoved.current = false;
+      cancelPendingTap();
+      return;
+    }
     if (lastTouchAt.current !== undefined && now - lastTouchAt.current <= 350) {
-      if (singleTapTimer.current !== undefined) {
-        window.clearTimeout(singleTapTimer.current);
-        singleTapTimer.current = undefined;
-      }
-      lastTouchAt.current = undefined;
+      cancelPendingTap();
       props.onRightClick();
       return;
     }
@@ -92,7 +135,10 @@ function Square(props: {
           props.onClick();
         }
       }}
+      onTouchStart={startTouch}
+      onTouchMove={moveTouch}
       onTouchEnd={touchEnd}
+      onTouchCancel={cancelTouch}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
