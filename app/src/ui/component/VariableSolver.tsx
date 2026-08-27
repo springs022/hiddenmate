@@ -257,6 +257,29 @@ export function VariableSolver() {
     }
   }, [savedPositions]);
 
+  useEffect(() => {
+    const clearSelectionOutsideBoardAndHands = (event: MouseEvent) => {
+      if (!editorState.selected.shown && selectedId === 0) {
+        return;
+      }
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest(
+          ".board-square, .variable-hand, [data-variable-selector]",
+        )
+      ) {
+        return;
+      }
+      setSelectedId(0);
+      dispatch({ ty: "clear-selection" });
+    };
+
+    document.addEventListener("click", clearSelectionOutsideBoardAndHands);
+    return () =>
+      document.removeEventListener("click", clearSelectionOutsideBoardAndHands);
+  }, [editorState.selected.shown, selectedId]);
+
   const clearResult = () => {
     if (solving) {
       solverClient.current?.cancel();
@@ -954,6 +977,7 @@ function VariableControls(props: {
             return (
               <ButtonGroup key={variable.id}>
                 <Button
+                  data-variable-selector
                   size="sm"
                   variant={
                     props.selected?.id === variable.id

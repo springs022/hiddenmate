@@ -110,6 +110,23 @@ test("moves a selected standard piece by clicking the hand background", () => {
   ).toContain("銀1");
 });
 
+test("clears piece selections when clicking outside the board and hands", () => {
+  const { container } = render(<App />);
+  const silverSquare = screen.getByLabelText("83");
+  const variableButton = screen.getByRole("button", { name: /▲V1 64/ });
+  const outside = screen.getByRole("heading", { name: "覆面駒" });
+
+  fireEvent.click(silverSquare);
+  expect(silverSquare.style.backgroundColor).not.toBe("white");
+  fireEvent.click(outside);
+  expect(silverSquare.style.backgroundColor).toBe("white");
+
+  fireEvent.click(variableButton);
+  expect(container.querySelectorAll(".variable-piece-selected")).toHaveLength(1);
+  fireEvent.click(outside);
+  expect(container.querySelectorAll(".variable-piece-selected")).toHaveLength(0);
+});
+
 test("saves the current variable position with a name", () => {
   render(<App />);
   fireEvent.click(screen.getByRole("button", { name: "現在の局面を保存" }));
