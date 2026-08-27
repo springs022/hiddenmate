@@ -13,9 +13,7 @@ import {
 import {
   Color,
   Position,
-  clonePosition,
   decodeSfen,
-  emptyHands,
   encodeSfen,
 } from "../../model";
 import { positionPieceBox } from "../../model/position";
@@ -102,17 +100,11 @@ function defaultSavedVariableProblems(): SavedVariableProblem[] {
 }
 
 function editablePositionFromBaseSfen(sfen: string): Position {
-  const position = decodeSfen(sfen);
-  position.hands.white = emptyHands();
-  position.hands.white = positionPieceBox(position);
-  position.hands.white.K = 0;
-  return position;
+  return decodeSfen(sfen);
 }
 
 function baseSfenFromPosition(position: Position): string {
-  const base = clonePosition(position);
-  base.hands.white = emptyHands();
-  return encodeSfen(base);
+  return encodeSfen(position);
 }
 
 function buildProblemJson(
@@ -415,7 +407,7 @@ export function VariableSolver() {
   };
 
   const clickKnownHand = (
-    color: Color,
+    color: Color | "pieceBox",
     kind: Parameters<typeof Hands>[0]["selected"],
   ) => {
     setSelectedId(0);
@@ -553,26 +545,11 @@ export function VariableSolver() {
 
         {inputMode === "form" ? (
           <>
-            <Form.Group className="mb-3" controlId="variable-base-sfen">
-              <Form.Label>通常駒のbase SFEN</Form.Label>
-              <div className="d-flex gap-2">
-                <Form.Control
-                  className="variable-sfen-input"
-                  size="sm"
-                  value={sfenInput}
-                  onChange={(event) => setSfenInput(event.target.value)}
-                  spellCheck={false}
-                />
-                <Button
-                  className="text-nowrap"
-                  size="sm"
-                  variant="outline-secondary"
-                  onClick={loadSfen}
-                >
-                  読込
-                </Button>
-              </div>
-            </Form.Group>
+            <VariablePieceBox
+              position={editorState.position}
+              selected={editorState.selected}
+              onClick={(kind) => clickKnownHand("pieceBox", kind)}
+            />
             <Row className="g-4 variable-three-column-layout">
               <Col xl={4} className="variable-layout-board">
                 <VariablePositionEditor
@@ -589,6 +566,26 @@ export function VariableSolver() {
                 />
               </Col>
               <Col xl={4} className="variable-layout-settings">
+                <Form.Group className="mb-3" controlId="variable-base-sfen">
+                  <Form.Label>通常駒のbase SFEN</Form.Label>
+                  <div className="d-flex gap-2">
+                    <Form.Control
+                      className="variable-sfen-input"
+                      size="sm"
+                      value={sfenInput}
+                      onChange={(event) => setSfenInput(event.target.value)}
+                      spellCheck={false}
+                    />
+                    <Button
+                      className="text-nowrap"
+                      size="sm"
+                      variant="outline-secondary"
+                      onClick={loadSfen}
+                    >
+                      読込
+                    </Button>
+                  </div>
+                </Form.Group>
                 <VariableSavedPositions
                   positions={savedPositions}
                   defaultName={baseSfen}
@@ -661,6 +658,30 @@ export function VariableSolver() {
         )}
       </Card.Body>
     </Card>
+  );
+}
+
+function VariablePieceBox(props: {
+  position: Position;
+  selected: ReturnType<typeof newState>["selected"];
+  onClick: Parameters<typeof Hands>[0]["onClick"];
+}) {
+  const selectedKind =
+    props.selected.shown &&
+    props.selected.ty === "hand" &&
+    props.selected.color === "pieceBox"
+      ? (props.selected.kind ?? "")
+      : undefined;
+  return (
+    <div className="variable-piece-box border rounded px-3 py-2 mb-3">
+      <div className="small text-muted">駒箱</div>
+      <Hands
+        pieceBox
+        hands={positionPieceBox(props.position)}
+        selected={selectedKind}
+        onClick={props.onClick}
+      />
+    </div>
   );
 }
 
@@ -769,7 +790,7 @@ function VariablePositionEditor(props: {
   clickBoard: (position: [number, number]) => void;
   rightClickBoard: (position: [number, number]) => void;
   clickKnownHand: (
-    color: Color,
+    color: Color | "pieceBox",
     kind: Parameters<typeof Hands>[0]["selected"],
   ) => void;
   moveSelectedToHand: (color: Color) => void;

@@ -141,7 +141,7 @@ mod hiddenmate_tests {
     #[test]
     fn even_plies_does_not_return_one_ply_solutions() {
         let json = r#"{
-            "baseSfen": "9/9/kS7/N8/1L7/9/9/9/9 b - 1",
+            "baseSfen": "9/9/kS7/N8/1L7/9/9/9/9 b 2r2b4g3s3n3l18p 1",
             "plies": 2,
             "variables": [{
                 "id": 1,

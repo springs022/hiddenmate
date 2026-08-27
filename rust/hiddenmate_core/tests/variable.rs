@@ -14,7 +14,7 @@ fn square(file: usize, rank: usize) -> Square {
 #[test]
 fn solution_count_ignores_variable_ids_in_both_hand_modes() {
     let problem = VariableProblem {
-        base_sfen: "9/9/kS7/9/1L7/9/9/9/9 b - 1".to_string(),
+        base_sfen: "9/9/kS7/9/1L7/9/9/9/9 b 2r2b4g3s4n3l18p 1".to_string(),
         rule: MateRule::Helpmate,
         variables: vec![
             VariableSpec {
@@ -184,7 +184,7 @@ fn rejects_more_than_six_variables() {
 }
 
 #[test]
-fn enumerates_candidate_worlds_and_completes_white_hand() {
+fn enumerates_candidate_worlds_from_piece_box() {
     let state = VariableProblem {
         base_sfen: "9/9/k8/9/9/9/9/9/9 b - 1".to_string(),
         rule: MateRule::Helpmate,
@@ -204,10 +204,33 @@ fn enumerates_candidate_worlds_and_completes_white_hand() {
         [Kind::Rook, Kind::ProRook].into_iter().collect()
     );
     for world in state.worlds() {
-        // 覆面駒が飛または龍なので、もう一枚の飛車が受方持駒になる。
-        assert_eq!(world.position().hands().count(Color::WHITE, Kind::Rook), 1);
-        assert_eq!(world.position().hands().count(Color::WHITE, Kind::Pawn), 18);
+        assert_eq!(world.position().hands().count(Color::WHITE, Kind::Rook), 0);
+        assert_eq!(world.position().hands().count(Color::WHITE, Kind::Pawn), 0);
     }
+}
+
+#[test]
+fn variable_can_come_from_white_hand_or_piece_box() {
+    let state = VariableProblem {
+        base_sfen: "9/9/k8/9/9/9/9/9/9 b r 1".to_string(),
+        rule: MateRule::Helpmate,
+        variables: vec![VariableSpec {
+            id: VariableId(1),
+            color: Color::BLACK,
+            location: VariableLocation::Board(square(6, 4)),
+            candidates: vec![Kind::Rook],
+        }],
+    }
+    .enumerate_with_hand_variable_mode(HandVariableMode::Distinguishable)
+    .unwrap();
+
+    assert_eq!(state.world_count(), 2);
+    let remaining_rooks = state
+        .worlds()
+        .iter()
+        .map(|world| world.position().hands().count(Color::WHITE, Kind::Rook))
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(remaining_rooks, [0, 1].into_iter().collect());
 }
 
 #[test]
@@ -383,7 +406,7 @@ fn pawn_drop_mate_world_is_removed_from_a_variable_drop() {
     // 94への覆面駒打ちは、歩なら打歩詰めで不合法だが、香・銀・金・飛なら合法な詰み。
     // 観測した94▲打から歩の世界だけを除外し、解として成立させる。
     let state = VariableProblem {
-        base_sfen: "9/9/kS7/9/1L7/9/9/9/9 b - 1".to_string(),
+        base_sfen: "9/9/kS7/9/1L7/9/9/9/9 b 2r2b4g3s4n3l18p 1".to_string(),
         rule: MateRule::Helpmate,
         variables: vec![VariableSpec {
             id: VariableId(1),
@@ -421,7 +444,7 @@ fn defender_pawn_block_is_not_filtered_as_pawn_drop_mate() {
     // 55飛の王手に35歩合。55飛は59飛にピンされているため35歩を取れず、
     // 攻方に次の王手がなくても、受方の35歩合自体は合法である。
     let state = VariableProblem {
-        base_sfen: "4K4/9/9/9/4R3k/9/9/9/4r4 w - 1".to_string(),
+        base_sfen: "4K4/9/9/9/4R3k/9/9/9/4r4 w p 1".to_string(),
         rule: MateRule::Helpmate,
         variables: vec![],
     }
@@ -438,7 +461,7 @@ fn defender_pawn_block_is_not_filtered_as_pawn_drop_mate() {
 #[test]
 fn includes_valid_three_ply_line_even_when_shorter_mates_exist() {
     let state = VariableProblem {
-        base_sfen: "9/9/kS7/N8/9/1L7/9/9/9 b - 1".to_string(),
+        base_sfen: "9/9/kS7/N8/9/1L7/9/9/9 b p 1".to_string(),
         rule: MateRule::Helpmate,
         variables: vec![VariableSpec {
             id: VariableId(1),
@@ -567,7 +590,7 @@ fn white_start_help_selfmate_allows_a_free_defender_move() {
 #[test]
 fn japanese_notation_uses_same_and_nonpromotion() {
     let state = VariableProblem {
-        base_sfen: "9/9/9/9/9/9/8k/9/9 w - 1".to_string(),
+        base_sfen: "9/9/9/9/9/9/8k/9/9 w r 1".to_string(),
         variables: vec![
             VariableSpec {
                 id: VariableId(1),

@@ -12,6 +12,7 @@ use crate::{
 };
 
 const MAX_VARIABLES: usize = 6;
+const NUM_SOURCE_KIND: usize = NUM_HAND_KIND + 1;
 
 /// 初形で位置・所属が判明している覆面駒。
 #[derive(Debug, Clone)]
@@ -24,9 +25,9 @@ pub struct VariableSpec {
 
 /// 覆面駒協力詰の初形。
 ///
-/// `base_sfen` には覆面駒を置かず、攻方の明示された持駒だけを書く。
-/// 受方持駒は、各候補世界で標準40枚から盤上駒・攻方持駒・覆面駒を
-/// 引いた残りとして補完する。
+/// `base_sfen` には覆面駒を置かず、通常駒だけを書く。
+/// 覆面駒の正体は、base局面の受方持駒または標準駒数から算出される
+/// 駒箱の在庫から割り当てる。
 #[derive(Debug, Clone)]
 pub struct VariableProblem {
     pub base_sfen: String,
@@ -46,9 +47,6 @@ impl VariableProblem {
         let base = PositionAux::from_sfen(&self.base_sfen)
             .with_context(|| format!("SFENを解釈できません: {}", self.base_sfen))?;
 
-        if !base.hands().is_empty(Color::WHITE) {
-            bail!("base_sfenの受方持駒は空にしてください。標準駒数から自動補完します");
-        }
         validate_specs(&base, &self.variables)?;
 
         let mut worlds = Vec::new();
@@ -107,9 +105,7 @@ fn enumerate_assignments(
     worlds: &mut Vec<ConcreteWorld>,
 ) {
     if index == specs.len() {
-        if let Some(world) = build_world(base.clone(), assigned, rule) {
-            worlds.push(world);
-        }
+        build_worlds(base, assigned, rule, worlds);
         return;
     }
 
@@ -130,11 +126,101 @@ fn enumerate_assignments(
     }
 }
 
+fn build_worlds(
+    base: &PositionAux,
+    variables: Vec<VariablePiece>,
+    rule: MateRule,
+    worlds: &mut Vec<ConcreteWorld>,
+) {
+    let mut assigned_counts = [0usize; NUM_SOURCE_KIND];
+    for piece in &variables {
+        let base_kind = piece.kind.maybe_unpromote();
+        if base_kind.index() >= NUM_SOURCE_KIND {
+            return;
+        }
+        assigned_counts[base_kind.index()] += 1;
+    }
+
+    let mut white_limits = [0usize; NUM_SOURCE_KIND];
+    let mut box_limits = [0usize; NUM_SOURCE_KIND];
+    for &kind in &KINDS[..NUM_SOURCE_KIND] {
+        let index = kind.index();
+        if index < NUM_HAND_KIND {
+            white_limits[index] = base.hands().count(Color::WHITE, kind);
+        }
+        let used = inventory_count(base, kind);
+        let max = kind.max_count() as usize;
+        if used > max {
+            return;
+        }
+        box_limits[index] = max - used;
+        if assigned_counts[index] > white_limits[index] + box_limits[index] {
+            return;
+        }
+    }
+
+    enumerate_source_counts(
+        base,
+        &variables,
+        rule,
+        &assigned_counts,
+        &white_limits,
+        &box_limits,
+        0,
+        [0; NUM_SOURCE_KIND],
+        worlds,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn enumerate_source_counts(
+    base: &PositionAux,
+    variables: &[VariablePiece],
+    rule: MateRule,
+    assigned_counts: &[usize; NUM_SOURCE_KIND],
+    white_limits: &[usize; NUM_SOURCE_KIND],
+    box_limits: &[usize; NUM_SOURCE_KIND],
+    index: usize,
+    mut white_consumed: [usize; NUM_SOURCE_KIND],
+    worlds: &mut Vec<ConcreteWorld>,
+) {
+    if index == NUM_SOURCE_KIND {
+        if let Some(world) = build_world(base.clone(), variables.to_vec(), rule, &white_consumed) {
+            worlds.push(world);
+        }
+        return;
+    }
+
+    let assigned = assigned_counts[index];
+    let min_from_white = assigned.saturating_sub(box_limits[index]);
+    let max_from_white = assigned.min(white_limits[index]);
+    for count in min_from_white..=max_from_white {
+        white_consumed[index] = count;
+        enumerate_source_counts(
+            base,
+            variables,
+            rule,
+            assigned_counts,
+            white_limits,
+            box_limits,
+            index + 1,
+            white_consumed,
+            worlds,
+        );
+    }
+}
+
 fn build_world(
     mut position: PositionAux,
     variables: Vec<VariablePiece>,
     rule: MateRule,
+    white_consumed: &[usize; NUM_SOURCE_KIND],
 ) -> Option<ConcreteWorld> {
+    for &kind in &KINDS[..NUM_HAND_KIND] {
+        position
+            .hands_mut()
+            .remove_n(Color::WHITE, kind, white_consumed[kind.index()]);
+    }
     for piece in &variables {
         match piece.location {
             VariableLocation::Board(square) => {
@@ -150,17 +236,6 @@ fn build_world(
                 position.hands_mut().add(color, piece.kind);
             }
         }
-    }
-
-    // 王以外の不足駒をすべて受方持駒として補完する。成駒も生駒と
-    // 合算して標準駒数を数える。
-    for &kind in &KINDS[..NUM_HAND_KIND] {
-        let used = inventory_count(&position, kind);
-        let max = kind.max_count() as usize;
-        if used > max {
-            return None;
-        }
-        position.hands_mut().add_n(Color::WHITE, kind, max - used);
     }
 
     if position.is_illegal_initial_position() {

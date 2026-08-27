@@ -57,6 +57,7 @@ test("renders HiddenMate title", () => {
   expect(screen.queryByRole("heading", { name: "はじめに" })).toBeNull();
   expect(screen.getByRole("button", { name: "盤面・フォーム" })).not.toBeNull();
   expect(screen.getByLabelText("通常駒のbase SFEN")).not.toBeNull();
+  expect(screen.getByText("駒箱")).not.toBeNull();
   expect(screen.queryByText("受方駒台")).toBeNull();
   expect(screen.queryByText("攻方駒台")).toBeNull();
   expect(screen.getByRole("button", { name: "単玉のみ" })).not.toBeNull();
@@ -92,6 +93,32 @@ test("places the editor, variable controls, and solve results in three columns",
   expect(columns).toHaveLength(3);
   expect(columns[1].contains(panel)).toBe(true);
   expect(columns[2].contains(solveControls)).toBe(true);
+  const baseSfen = screen.getByLabelText("通常駒のbase SFEN");
+  const savedPositions = container.querySelector(".variable-saved-positions");
+  expect(columns[1].contains(baseSfen)).toBe(true);
+  expect(
+    Boolean(
+      baseSfen.compareDocumentPosition(savedPositions!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ),
+  ).toBe(true);
+});
+
+test("moves a standard piece from the piece box onto the board", () => {
+  const { container } = render(<App />);
+  const pieceBox = container.querySelector(".variable-piece-box");
+  const rook = Array.from(pieceBox!.querySelectorAll("span")).find((element) =>
+    element.textContent?.startsWith("飛"),
+  );
+
+  expect(rook).not.toBeUndefined();
+  fireEvent.click(rook!);
+  fireEvent.click(screen.getByLabelText("55"));
+
+  expect(screen.getByLabelText("55").textContent).toContain("飛");
+  expect(
+    (screen.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
+  ).toContain("R");
 });
 
 test("moves a selected standard piece by clicking the hand background", () => {
