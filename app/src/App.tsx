@@ -10,7 +10,15 @@ function App() {
       <p>覆面駒・透明駒協力詰ソルバー</p>
       <VariableSolver />
       <footer className="border-top mt-4 py-3 small text-secondary">
-        HiddenMateはfmrsを基にしたMIT Licenseのソフトウェアです。{" "}
+        HiddenMateは
+        <a
+          href="https://github.com/ogiekako/fmrs"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          fmrs
+        </a>
+        を基にしたMIT Licenseのソフトウェアです。{" "}
         <a href={`${FMRS_BASE_PATH}LICENSE`}>ライセンス</a>
         {" / "}
         <a href={`${FMRS_BASE_PATH}THIRD_PARTY_NOTICES.md`}>第三者ライセンス</a>
