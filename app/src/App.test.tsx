@@ -2,7 +2,32 @@ import React from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import App from "./App";
 
-beforeEach(() => localStorage.clear());
+const workerInstances: MockWorker[] = [];
+
+class MockWorker {
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  onerror: ((event: ErrorEvent) => void) | null = null;
+  onmessageerror: ((event: MessageEvent) => void) | null = null;
+  postMessage = jest.fn();
+  terminate = jest.fn();
+
+  constructor() {
+    workerInstances.push(this);
+  }
+}
+
+beforeAll(() => {
+  Object.defineProperty(globalThis, "Worker", {
+    configurable: true,
+    writable: true,
+    value: MockWorker,
+  });
+});
+
+beforeEach(() => {
+  localStorage.clear();
+  workerInstances.length = 0;
+});
 
 test("renders HiddenMate title", () => {
   render(<App />);
@@ -192,19 +217,38 @@ test("does not show nothing when an otherwise empty hand has a variable", () => 
   expect(attackHand?.textContent).not.toContain("なし");
 });
 
-test("shows a spinner before starting a variable solve", async () => {
-  jest.useFakeTimers();
+test("shows progress and can cancel and restart a variable solve", () => {
   render(<App />);
 
   fireEvent.click(screen.getByRole("button", { name: "検討" }));
 
   expect(screen.getByRole("status")).not.toBeNull();
-  expect(screen.getByRole("button", { name: "検討中…" })).not.toBeNull();
+  expect(screen.getByRole("button", { name: "中断" })).not.toBeNull();
+  expect(workerInstances).toHaveLength(1);
+  expect(workerInstances[0].postMessage).not.toHaveBeenCalled();
 
-  await act(async () => {
-    jest.runOnlyPendingTimers();
+  act(() => {
+    workerInstances[0].onmessage?.({
+      data: { type: "ready" },
+    } as MessageEvent);
   });
-  jest.useRealTimers();
+  expect(workerInstances[0].postMessage).toHaveBeenCalledTimes(1);
+
+  fireEvent.click(screen.getByRole("button", { name: "中断" }));
+
+  expect(workerInstances[0].terminate).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole("status")).toBeNull();
+  expect(screen.getByRole("button", { name: "検討" })).not.toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: "検討" }));
+
+  expect(workerInstances).toHaveLength(2);
+  expect(screen.getByRole("button", { name: "中断" })).not.toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: "JSON詳細編集" }));
+
+  expect(workerInstances[1].terminate).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole("button", { name: "検討" })).not.toBeNull();
 });
 
 test("allows clearing the plies field before entering a new value", () => {

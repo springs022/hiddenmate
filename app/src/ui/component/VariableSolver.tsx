@@ -19,7 +19,7 @@ import {
   encodeSfen,
 } from "../../model";
 import { positionPieceBox } from "../../model/position";
-import { solve_variable_problem } from "../../wasm_api";
+import { VariableSolverClient } from "../../solve/variable_solver_client";
 import { newState, reduce } from "../state/state";
 import Board from "./Board";
 import Hands from "./Hands";
@@ -221,6 +221,7 @@ export function VariableSolver() {
   const [response, setResponse] = useState<VariableSolveResponse>();
   const [error, setError] = useState<string>();
   const [solving, setSolving] = useState(false);
+  const solverClient = useRef<VariableSolverClient>();
   const [savedPositions, setSavedPositions] = useState<SavedVariableProblem[]>(
     loadSavedVariableProblems,
   );
@@ -236,6 +237,12 @@ export function VariableSolver() {
   );
 
   useEffect(() => setSfenInput(baseSfen), [baseSfen]);
+  useEffect(
+    () => () => {
+      solverClient.current?.dispose();
+    },
+    [],
+  );
   useEffect(() => {
     try {
       const store: SavedVariableProblemStore = {
@@ -249,6 +256,10 @@ export function VariableSolver() {
   }, [savedPositions]);
 
   const clearResult = () => {
+    if (solving) {
+      solverClient.current?.cancel();
+      setSolving(false);
+    }
     setError(undefined);
     setResponse(undefined);
   };
@@ -438,19 +449,31 @@ export function VariableSolver() {
   };
 
   const solve = async () => {
+    if (solving) {
+      solverClient.current?.cancel();
+      setSolving(false);
+      return;
+    }
+
+    if (inputMode === "form" && variables.length === 0) {
+      setError("覆面駒を1枚以上追加してください");
+      setResponse(undefined);
+      return;
+    }
+
     setSolving(true);
     clearResult();
-    // 同期Wasm探索を始める前に、検討中表示をブラウザへ描画させる。
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
     try {
-      if (inputMode === "form" && variables.length === 0) {
-        throw new Error("覆面駒を1枚以上追加してください");
-      }
-      const json = solve_variable_problem(
+      const client =
+        solverClient.current ??
+        (solverClient.current = new VariableSolverClient());
+      const json = await client.solve(
         inputMode === "form" ? generatedProblem : manualProblem,
         maxSolutions,
       );
-      setResponse(JSON.parse(json) as VariableSolveResponse);
+      if (json !== undefined) {
+        setResponse(JSON.parse(json) as VariableSolveResponse);
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -1096,9 +1119,9 @@ function VariableSolveControls(props: {
           className="variable-solve-button text-nowrap"
           size="sm"
           onClick={props.onSolve}
-          disabled={props.solving}
+          variant={props.solving ? "danger" : "primary"}
         >
-          {props.solving ? "検討中…" : "検討"}
+          {props.solving ? "中断" : "検討"}
         </Button>
         {props.solving && (
           <Spinner animation="border" role="status">
