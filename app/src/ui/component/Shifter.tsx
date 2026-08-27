@@ -1,23 +1,34 @@
 import React, { useState } from "react";
 import * as types from "../types";
 
-type Direction = "up" | "down" | "left" | "right";
+export type ShiftDirection = "up" | "down" | "left" | "right";
 
-export function Shifter(props: {
-  dispatch: types.Dispatcher;
+type ShifterProps = {
   children: React.ReactNode;
-}) {
-  const cursors = new Map<Direction, React.ReactNode>();
+} & (
+  | { dispatch: types.Dispatcher; onShift?: never }
+  | {
+      dispatch?: never;
+      onShift: (direction: ShiftDirection) => void;
+    }
+);
+
+export function Shifter(props: ShifterProps) {
+  const cursors = new Map<ShiftDirection, React.ReactNode>();
   for (const dir of ["up", "down", "left", "right"] as const) {
     cursors.set(
       dir,
       <Cursor
         direction={dir}
         onClick={() => {
-          props.dispatch({
-            ty: "shift",
-            dir,
-          });
+          if (props.onShift) {
+            props.onShift(dir);
+          } else {
+            props.dispatch?.({
+              ty: "shift",
+              dir,
+            });
+          }
         }}
       />
     );
@@ -36,7 +47,7 @@ export function Shifter(props: {
   );
 }
 
-function Cursor(props: { direction: Direction; onClick: () => void }) {
+function Cursor(props: { direction: ShiftDirection; onClick: () => void }) {
   const [focused, setFocused] = useState(false);
 
   const letter = {

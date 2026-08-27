@@ -23,6 +23,7 @@ import { VariableSolverClient } from "../../solve/variable_solver_client";
 import { newState, reduce } from "../state/state";
 import Board from "./Board";
 import Hands from "./Hands";
+import { ShiftDirection, Shifter } from "./Shifter";
 
 type InputMode = "form" | "json";
 type MateRule = "helpmate" | "helpSelfmate";
@@ -287,6 +288,27 @@ export function VariableSolver() {
     }
     setError(undefined);
     setResponse(undefined);
+  };
+
+  const shiftBoard = (direction: ShiftDirection) => {
+    if (solving) {
+      return;
+    }
+    dispatch({ ty: "shift", dir: direction });
+    setVariables((current) =>
+      current.map((variable) =>
+        variable.location.type === "board"
+          ? {
+              ...variable,
+              location: {
+                type: "board",
+                square: shiftedSquare(variable.location.square, direction),
+              },
+            }
+          : variable,
+      ),
+    );
+    clearResult();
   };
 
   const changeHandVariableMode = (mode: HandVariableMode) => {
@@ -563,6 +585,7 @@ export function VariableSolver() {
                   clickKnownHand={clickKnownHand}
                   moveSelectedToHand={moveSelectedToHand}
                   selectVariable={selectVariable}
+                  shiftBoard={shiftBoard}
                 />
               </Col>
               <Col xl={4} className="variable-layout-settings">
@@ -751,6 +774,7 @@ function VariablePositionEditor(props: {
   ) => void;
   moveSelectedToHand: (color: Color) => void;
   selectVariable: (id: number) => void;
+  shiftBoard: (direction: ShiftDirection) => void;
 }) {
   const boardSelected =
     props.selected?.location.type === "board"
@@ -788,14 +812,16 @@ function VariablePositionEditor(props: {
         selectedId={props.selected?.id}
         onVariableClick={props.selectVariable}
       />
-      <CoordinateBoard
-        position={props.position}
-        variables={props.variables}
-        selectedId={props.selected?.id}
-        selectedPosition={boardSelected}
-        onClick={props.clickBoard}
-        onRightClick={props.rightClickBoard}
-      />
+      <Shifter onShift={props.shiftBoard}>
+        <CoordinateBoard
+          position={props.position}
+          variables={props.variables}
+          selectedId={props.selected?.id}
+          selectedPosition={boardSelected}
+          onClick={props.clickBoard}
+          onRightClick={props.rightClickBoard}
+        />
+      </Shifter>
       <VariableHand
         color="black"
         hands={props.position.hands.black}
@@ -1373,4 +1399,15 @@ function locationLabel(location: VariableLocation): string {
 
 function squareToPosition(square: string): [number, number] {
   return [Number(square[1]) - 1, Number(square[0]) - 1];
+}
+
+function shiftedSquare(square: string, direction: ShiftDirection): string {
+  const [row, column] = squareToPosition(square);
+  const [shiftedRow, shiftedColumn] = {
+    up: [(row + 8) % 9, column],
+    down: [(row + 1) % 9, column],
+    left: [row, (column + 1) % 9],
+    right: [row, (column + 8) % 9],
+  }[direction];
+  return `${shiftedColumn + 1}${shiftedRow + 1}`;
 }

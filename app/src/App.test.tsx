@@ -127,6 +127,20 @@ test("clears piece selections when clicking outside the board and hands", () => 
   expect(container.querySelectorAll(".variable-piece-selected")).toHaveLength(0);
 });
 
+test("shifts standard and variable pieces together", () => {
+  render(<App />);
+
+  expect(screen.getByLabelText("83").textContent).toContain("銀");
+  expect(screen.getByLabelText("64 V1").textContent).toContain("V1");
+
+  fireEvent.click(screen.getByTitle("right shift"));
+
+  expect(screen.getByLabelText("73").textContent).toContain("銀");
+  expect(screen.getByLabelText("54 V1").textContent).toContain("V1");
+  expect(screen.getByLabelText("83").textContent).not.toContain("銀");
+  expect(screen.getByLabelText("64").textContent).not.toContain("V1");
+});
+
 test("saves the current variable position with a name", () => {
   render(<App />);
   fireEvent.click(screen.getByRole("button", { name: "現在の局面を保存" }));
