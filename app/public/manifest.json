@@ -1,6 +1,6 @@
 {
   "short_name": "HiddenMate",
-  "name": "HiddenMate - Variable and Invisible Piece Helpmate Solver",
+  "name": "HiddenMate - 覆面駒協力詰ソルバー（β版）",
   "start_url": ".",
   "display": "standalone",
   "theme_color": "#000000",

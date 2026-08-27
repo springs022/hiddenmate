@@ -1,5 +1,6 @@
 import React from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { vi } from "vitest";
 import App from "./App";
 
 const workerInstances: MockWorker[] = [];
@@ -8,8 +9,8 @@ class MockWorker {
   onmessage: ((event: MessageEvent) => void) | null = null;
   onerror: ((event: ErrorEvent) => void) | null = null;
   onmessageerror: ((event: MessageEvent) => void) | null = null;
-  postMessage = jest.fn();
-  terminate = jest.fn();
+  postMessage = vi.fn();
+  terminate = vi.fn();
 
   constructor() {
     workerInstances.push(this);
@@ -27,12 +28,20 @@ beforeAll(() => {
 beforeEach(() => {
   localStorage.clear();
   workerInstances.length = 0;
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: vi.fn().mockResolvedValue(undefined) },
+  });
 });
 
 test("renders HiddenMate title", () => {
   render(<App />);
   expect(screen.getByRole("heading", { name: "HiddenMate" })).not.toBeNull();
   expect(screen.getByRole("heading", { name: "覆面駒" })).not.toBeNull();
+  expect(screen.getByText("覆面駒版 β")).not.toBeNull();
+  expect(screen.getByRole("heading", { name: "透明駒" })).not.toBeNull();
+  expect(screen.getByText(/透明駒の検討機能は開発中です/)).not.toBeNull();
+  expect(screen.getByRole("heading", { name: "はじめに" })).not.toBeNull();
   expect(screen.getByRole("button", { name: "盤面・フォーム" })).not.toBeNull();
   expect(screen.getByLabelText("通常駒のbase SFEN")).not.toBeNull();
   expect(screen.queryByText("受方駒台")).toBeNull();
@@ -52,9 +61,7 @@ test("renders HiddenMate title", () => {
     screen.queryByText(/通常駒は盤面・駒台をクリックして移動できます/),
   ).toBeNull();
   expect(screen.getByRole("button", { name: "検討" })).not.toBeNull();
-  expect(
-    screen.getByRole("heading", { name: "Saved positions" }),
-  ).not.toBeNull();
+  expect(screen.getByRole("heading", { name: "保存局面" })).not.toBeNull();
   expect(screen.queryByRole("heading", { name: "通常協力詰" })).toBeNull();
 });
 
@@ -96,7 +103,7 @@ test("saves the current variable position with a name", () => {
   fireEvent.change(screen.getByLabelText("保存名"), {
     target: { value: "テスト局面" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
   expect(screen.getByRole("button", { name: "テスト局面" })).not.toBeNull();
   expect(localStorage.getItem("hiddenmate_variable_saved_positions")).toContain(
@@ -304,4 +311,40 @@ test("treats a board double tap like a right click", () => {
   fireEvent.touchEnd(silverSquare);
 
   expect(silverSquare.textContent).toContain("全");
+});
+
+test("copies the generated problem JSON", async () => {
+  render(<App />);
+
+  fireEvent.click(screen.getByRole("button", { name: "問題JSONをコピー" }));
+
+  expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+    expect.stringContaining('"baseSfen"'),
+  );
+  expect(await screen.findByText("コピーしました")).not.toBeNull();
+});
+
+test("copies a formatted solve result", async () => {
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "検討" }));
+  act(() => {
+    workerInstances[0].onmessage?.({ data: { type: "ready" } } as MessageEvent);
+    workerInstances[0].onmessage?.({
+      data: {
+        type: "solved",
+        requestId: 1,
+        responseJson: JSON.stringify({
+          worldCount: 1,
+          candidates: [{ id: 1, kinds: ["R"] }],
+          solutions: [["82▲(64)"]],
+        }),
+      },
+    } as MessageEvent);
+  });
+
+  fireEvent.click(await screen.findByRole("button", { name: "解答をコピー" }));
+
+  expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+    expect.stringContaining("1. 82▲(64) まで 1手"),
+  );
 });

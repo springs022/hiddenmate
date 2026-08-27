@@ -4,16 +4,21 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin");
 const webpack = require("webpack");
 
-class LicenseAssetsPlugin {
+class StaticAssetsPlugin {
   apply(compiler) {
-    compiler.hooks.thisCompilation.tap("LicenseAssetsPlugin", (compilation) => {
+    compiler.hooks.thisCompilation.tap("StaticAssetsPlugin", (compilation) => {
       compilation.hooks.processAssets.tap(
         {
-          name: "LicenseAssetsPlugin",
+          name: "StaticAssetsPlugin",
           stage: webpack.Compilation.PROCESS_ASSETS_STAGE_ADDITIONAL,
         },
         () => {
           const assets = [
+            ["hiddenmate-ogp.png", "app/public/hiddenmate-ogp.png"],
+            [
+              "hiddenmate-screenshot.png",
+              "app/public/hiddenmate-screenshot.png",
+            ],
             ["LICENSE", "LICENSE"],
             ["THIRD_PARTY_NOTICES.md", "THIRD_PARTY_NOTICES.md"],
             ["third-party-licenses/react.txt", "node_modules/react/LICENSE"],
@@ -41,10 +46,6 @@ class LicenseAssetsPlugin {
             [
               "third-party-licenses/web-vitals.txt",
               "node_modules/web-vitals/LICENSE",
-            ],
-            [
-              "third-party-licenses/kifu-for-js.txt",
-              "third_party/kifu-for-js-LICENSE.txt",
             ],
             [
               "third-party-licenses/classnames.txt",
@@ -113,7 +114,7 @@ module.exports = (env, argv) => {
         template: "./app/public/index.html",
         filename: "404.html",
       }),
-      new LicenseAssetsPlugin(),
+      new StaticAssetsPlugin(),
       new webpack.DefinePlugin({
         FMRS_API_BASE_URL: JSON.stringify(process.env.FMRS_API_BASE_URL || ""),
         FMRS_BASE_PATH: JSON.stringify(basePath),

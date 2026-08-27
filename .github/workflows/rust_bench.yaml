@@ -19,6 +19,7 @@ permissions:
 jobs:
   benchmark-iai:
     name: Run iai-callgrind benchmark
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -110,6 +111,7 @@ jobs:
 
   benchmark-cargo:
     name: Run cargo benchmark
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

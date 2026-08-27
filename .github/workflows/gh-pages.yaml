@@ -4,28 +4,83 @@ on:
   push:
     branches:
       - main
+  pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build-and-deploy:
+  rust-test:
+    name: Rust Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --workspace --no-fail-fast --locked
+
+  rust-clippy:
+    name: Rust Clippy
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo clippy --all-targets --all-features --locked
+
+  web-test-and-build:
+    name: Web Test and Build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
       - name: Set up Node
         uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Set up pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.19.0 --activate
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Test
+        run: pnpm test
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-      - name: Install & Build
+      - name: Build
         run: |
-          npm i
-          npm run build
-          rm ./docs/.gitignore
-          rm ./docs/pkg/.gitignore
+          pnpm build
+          rm -f ./docs/.gitignore
+          rm -f ./docs/pkg/.gitignore
+      - name: Upload site
+        uses: actions/upload-artifact@v7
+        with:
+          name: github-pages-site
+          path: docs
+          retention-days: 1
+
+  deploy:
+    name: Deploy GitHub Pages
+    if: github.event_name == 'push'
+    needs: [rust-test, rust-clippy, web-test-and-build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Download site
+        uses: actions/download-artifact@v8
+        with:
+          name: github-pages-site
+          path: docs
       - name: Preserve dev directory from gh-pages
         run: |
           git fetch origin gh-pages --depth 1 2>/dev/null || true

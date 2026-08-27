@@ -13,20 +13,17 @@ fmrsの著作権表示とMIT License全文は [LICENSE](LICENSE) に保持して
 
 ## Web版の主要なランタイム依存関係
 
-| ソフトウェア | ライセンス | 出典 |
-| --- | --- | --- |
-| React / React DOM / Scheduler | MIT | https://github.com/facebook/react |
-| Bootstrap | MIT | https://github.com/twbs/bootstrap |
-| React Bootstrap | MIT | https://github.com/react-bootstrap/react-bootstrap |
-| react-icons | MIT（アイコンは各収録元のライセンスにも従う） | https://github.com/react-icons/react-icons |
-| Bootstrap Icons（`react-icons/bs`） | MIT | https://github.com/twbs/icons |
-| web-vitals | Apache License 2.0 | https://github.com/GoogleChrome/web-vitals |
-| classnames | MIT | https://github.com/JedWatson/classnames |
-| Kifu for JS | MIT | https://github.com/na2hiro/Kifu-for-JS |
+| ソフトウェア                        | ライセンス                                    | 出典                                               |
+| ----------------------------------- | --------------------------------------------- | -------------------------------------------------- |
+| React / React DOM / Scheduler       | MIT                                           | https://github.com/facebook/react                  |
+| Bootstrap                           | MIT                                           | https://github.com/twbs/bootstrap                  |
+| React Bootstrap                     | MIT                                           | https://github.com/react-bootstrap/react-bootstrap |
+| react-icons                         | MIT（アイコンは各収録元のライセンスにも従う） | https://github.com/react-icons/react-icons         |
+| Bootstrap Icons（`react-icons/bs`） | MIT                                           | https://github.com/twbs/icons                      |
+| web-vitals                          | Apache License 2.0                            | https://github.com/GoogleChrome/web-vitals         |
+| classnames                          | MIT                                           | https://github.com/JedWatson/classnames            |
 
-Web版のビルドでは、npmから実際に取り込んだ主要なランタイム依存関係とKifu for JSのライセンス原文を `third-party-licenses/` に出力します。Webpackが生成する `main.js.LICENSE.txt` にも、バンドル時に検出された著作権表示が保存されます。
-
-Kifu for JSはWebページからjsDelivr上の配布物を直接読み込みます。Kifu for JS自身のMIT LicenseはWeb配布物にも同梱しています。その配布物に含まれる第三者素材の条件については、上記の公式リポジトリおよび配布物のライセンス表示も参照してください。
+Web版のビルドでは、npmから実際に取り込んだ主要なランタイム依存関係のライセンス原文を `third-party-licenses/` に出力します。Webpackが生成する `main.js.LICENSE.txt` にも、バンドル時に検出された著作権表示が保存されます。
 
 ## Rust / WebAssembly依存関係
 

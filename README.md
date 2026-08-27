@@ -1,12 +1,26 @@
 # HiddenMate
 
-覆面駒（Variable）と透明駒（Invisible）を扱う、フェアリー協力詰の検討・創作支援ソフトウェアです。
+覆面駒（Variable）入りのフェアリー協力詰を検討・創作するためのソフトウェアです。現在は**覆面駒版β**を公開しており、透明駒（Invisible）の検討機能は開発中です。
+
+Web版: **[HiddenMateを開く](https://springs022.github.io/hiddenmate/)**
+
+![HiddenMateの覆面駒検討画面](app/public/hiddenmate-screenshot.png)
 
 高速な通常協力詰エンジン [fmrs](https://github.com/ogiekako/fmrs) を基盤にしています。確定した通常局面の合法手生成は `fmrs_core` に任せ、HiddenMate は「ここまでの手順と矛盾しない具体局面の集合」を管理します。
 
-## 現在の実装状況
+問題と局面は利用者のブラウザ内で処理され、外部サーバーへ送信されません。インストールせずにそのまま利用できます。
 
-最初の覆面駒MVPを実装中です。現在は次に対応しています。
+## まず試す
+
+1. [Web版](https://springs022.github.io/hiddenmate/)を開きます。
+2. 入力済みのサンプルを変更せず「検討」を押します。
+3. 初形候補世界、覆面駒の候補駒種、解答が表示されます。
+
+通常駒は駒を選択してから盤または駒台をクリックして移動します。覆面駒は「覆面駒一覧」で選択して配置します。右クリック（スマートフォンではダブルタップ）で、通常駒の成・所属や覆面駒の所属を切り替えられます。
+
+## 覆面駒版βの実装状況
+
+現在は次に対応しています。
 
 - 候補を常に通常将棋の全14駒種とする、位置・所属既知の覆面駒
 - 盤上と攻方・受方駒台への覆面駒配置
@@ -23,7 +37,7 @@
 - Web盤面と両方の駒台での通常駒・覆面駒編集
 - ▲・△を使った日本語の解答表示
 
-Web版は [HiddenMate](https://springs022.github.io/hiddenmate/) で試せます。入力済みのサンプル問題は「覆面駒を検討」ボタンだけで実行できます。盤面と駒台をクリックして通常駒を移動でき、覆面駒は盤上または攻方・受方駒台に配置できます。候補駒種は選択せず、常に全14駒種です（駒台では合法な7駒種へ自動的に絞られます）。透明駒は今後実装します。
+候補駒種は選択せず、常に全14駒種です（駒台では合法な7駒種へ自動的に絞られます）。問題JSONと解答はWeb画面からコピーできます。
 
 ## CLI
 
@@ -58,11 +72,17 @@ cargo clippy --all-targets --all-features
 Web版：
 
 ```console
-npm install
-npm run serve
+corepack enable
+pnpm install --frozen-lockfile
+pnpm test
+pnpm run serve
 ```
 
 設計は [design/architecture.md](design/architecture.md)、公開方法は [DEPLOYMENT.md](DEPLOYMENT.md) に記載しています。
+
+## フィードバック
+
+不具合、対応してほしいルール、使いにくい点は [GitHub Issues](https://github.com/springs022/hiddenmate/issues) へお寄せください。再現に使った問題JSONを添えていただけると調査しやすくなります。
 
 ## ライセンスと由来
 

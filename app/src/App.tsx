@@ -1,5 +1,6 @@
-import { VariableSolver } from "./ui/component/VariableSolver";
 import "bootstrap/dist/css/bootstrap.min.css";
+import { Card } from "react-bootstrap";
+import { VariableSolver } from "./ui/component/VariableSolver";
 
 declare const FMRS_BASE_PATH: string;
 
@@ -7,8 +8,21 @@ function App() {
   return (
     <div className="container">
       <h1>HiddenMate</h1>
-      <p>覆面駒・透明駒協力詰ソルバー</p>
+      <p>
+        覆面駒・透明駒協力詰ソルバー{" "}
+        <span className="badge bg-secondary">覆面駒版 β</span>
+      </p>
       <VariableSolver />
+      <Card className="mb-4">
+        <Card.Header as="h2" className="h5 mb-0">
+          透明駒
+        </Card.Header>
+        <Card.Body>
+          <p className="mb-0">
+            透明駒の検討機能は開発中です。現在は覆面駒の検討機能をご利用ください。
+          </p>
+        </Card.Body>
+      </Card>
       <footer className="border-top mt-4 py-3 small text-secondary">
         HiddenMateは
         <a

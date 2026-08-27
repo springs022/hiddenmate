@@ -61,6 +61,8 @@ interface VariableSolveResponse {
   solutions: string[][];
 }
 
+type CopyState = "idle" | "copied" | "error";
+
 interface SavedVariableProblem {
   name: string;
   problem: ProblemDocument;
@@ -487,20 +489,41 @@ export function VariableSolver() {
         覆面駒
       </Card.Header>
       <Card.Body>
-        <ButtonGroup className="mb-3" aria-label="問題入力方法">
-          <Button
-            variant={inputMode === "form" ? "primary" : "outline-primary"}
-            onClick={() => selectMode("form")}
-          >
-            盤面・フォーム
-          </Button>
-          <Button
-            variant={inputMode === "json" ? "primary" : "outline-primary"}
-            onClick={() => selectMode("json")}
-          >
-            JSON詳細編集
-          </Button>
-        </ButtonGroup>
+        <Alert variant="info" className="small">
+          <Alert.Heading as="h3" className="h6">
+            はじめに
+          </Alert.Heading>
+          <ul className="mb-0 ps-3">
+            <li>入力済みのサンプルは、そのまま「検討」を押して試せます。</li>
+            <li>
+              通常駒は駒を選んで移動先をクリックします。右クリック（スマートフォンではダブルタップ）で成・所属などを切り替えます。
+            </li>
+            <li>
+              覆面駒は「覆面駒一覧」で選択し、盤または駒台をクリックして配置します。
+            </li>
+            <li>受方持駒は標準駒数から自動的に補完されます。</li>
+          </ul>
+        </Alert>
+        <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+          <ButtonGroup aria-label="問題入力方法">
+            <Button
+              variant={inputMode === "form" ? "primary" : "outline-primary"}
+              onClick={() => selectMode("form")}
+            >
+              盤面・フォーム
+            </Button>
+            <Button
+              variant={inputMode === "json" ? "primary" : "outline-primary"}
+              onClick={() => selectMode("json")}
+            >
+              JSON詳細編集
+            </Button>
+          </ButtonGroup>
+          <CopyButton
+            text={inputMode === "form" ? generatedProblem : manualProblem}
+            idleLabel="問題JSONをコピー"
+          />
+        </div>
 
         {inputMode === "form" ? (
           <>
@@ -636,7 +659,7 @@ function VariableSavedPositions(props: {
   return (
     <div className="variable-saved-positions border rounded p-3 mb-3">
       <div className="d-flex align-items-center gap-2 mb-2">
-        <h3 className="h6 mb-0">Saved positions</h3>
+        <h3 className="h6 mb-0">保存局面</h3>
         {!adding && (
           <Button
             aria-label="現在の局面を保存"
@@ -663,7 +686,7 @@ function VariableSavedPositions(props: {
             }}
           />
           <Button size="sm" onClick={confirmAdd}>
-            Save
+            保存
           </Button>
           <Button
             aria-label="保存をキャンセル"
@@ -1134,6 +1157,7 @@ function VariableSolveControls(props: {
 }
 
 function VariableResult(props: { response: VariableSolveResponse }) {
+  const copyText = formatResultForCopy(props.response);
   return (
     <div aria-live="polite">
       <p>
@@ -1159,7 +1183,10 @@ function VariableResult(props: { response: VariableSolveResponse }) {
           ))}
         </tbody>
       </Table>
-      <h3 className="h6">解答</h3>
+      <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <h3 className="h6 mb-0">解答</h3>
+        <CopyButton text={copyText} idleLabel="解答をコピー" />
+      </div>
       {props.response.solutions.length === 0 ? (
         <p>解なし</p>
       ) : (
@@ -1191,6 +1218,76 @@ function VariableResult(props: { response: VariableSolveResponse }) {
       )}
     </div>
   );
+}
+
+function CopyButton(props: { text: string; idleLabel: string }) {
+  const [state, setState] = useState<CopyState>("idle");
+
+  useEffect(() => setState("idle"), [props.text]);
+
+  const copy = async () => {
+    try {
+      await copyToClipboard(props.text);
+      setState("copied");
+    } catch {
+      setState("error");
+    }
+  };
+
+  return (
+    <Button size="sm" variant="outline-secondary" onClick={copy}>
+      <span aria-live="polite">
+        {state === "copied"
+          ? "コピーしました"
+          : state === "error"
+            ? "コピーできませんでした"
+            : props.idleLabel}
+      </span>
+    </Button>
+  );
+}
+
+async function copyToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand?.("copy") ?? false;
+  textarea.remove();
+  if (!copied) {
+    throw new Error("clipboard is unavailable");
+  }
+}
+
+function formatResultForCopy(response: VariableSolveResponse): string {
+  const candidates = response.candidates.map(
+    (candidate) =>
+      `V${candidate.id}: ${candidate.kinds.map(japaneseCandidateKind).join("、") || "なし"}`,
+  );
+  const solutions =
+    response.solutions.length === 0
+      ? ["解なし"]
+      : response.solutions.map(
+          (solution, index) =>
+            `${index + 1}. ${solution.join(" ")} まで ${solution.length}手`,
+        );
+  return [
+    `初形候補世界: ${response.worldCount}`,
+    `解数: ${response.solutions.length}`,
+    "",
+    "初形での駒種候補",
+    ...candidates,
+    "",
+    "解答",
+    ...solutions,
+  ].join("\n");
 }
 
 function japaneseCandidateKind(kind: string): string {
