@@ -81,6 +81,10 @@ jobs:
         with:
           name: github-pages-site
           path: docs
+      - name: Remove build-output ignore files
+        run: |
+          rm -f ./docs/.gitignore
+          rm -f ./docs/pkg/.gitignore
       - name: Preserve dev directory from gh-pages
         run: |
           git fetch origin gh-pages --depth 1 2>/dev/null || true
