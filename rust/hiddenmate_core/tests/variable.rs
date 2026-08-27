@@ -33,7 +33,10 @@ fn solution_count_ignores_variable_ids_in_both_hand_modes() {
     };
 
     for state in [
-        problem.clone().enumerate().unwrap(),
+        problem
+            .clone()
+            .enumerate_with_hand_variable_mode(HandVariableMode::Distinguishable)
+            .unwrap(),
         problem
             .enumerate_with_hand_variable_mode(HandVariableMode::Indistinguishable)
             .unwrap(),
@@ -73,7 +76,15 @@ fn indistinguishable_hand_variables_branch_then_resolve_which_one_remains() {
         ],
     };
 
-    let distinguishable = problem.clone().enumerate().unwrap();
+    assert_eq!(
+        problem.clone().enumerate().unwrap().hand_variable_mode(),
+        HandVariableMode::Indistinguishable
+    );
+
+    let distinguishable = problem
+        .clone()
+        .enumerate_with_hand_variable_mode(HandVariableMode::Distinguishable)
+        .unwrap();
     let distinguishable_drops = distinguishable
         .observed_moves()
         .into_iter()
@@ -166,7 +177,7 @@ fn rejects_more_than_six_variables() {
         rule: MateRule::Helpmate,
         variables,
     }
-    .enumerate()
+    .enumerate_with_hand_variable_mode(HandVariableMode::Distinguishable)
     .unwrap_err();
 
     assert!(error.to_string().contains("覆面駒は6枚まで指定できます"));
@@ -184,7 +195,7 @@ fn enumerates_candidate_worlds_and_completes_white_hand() {
             candidates: vec![Kind::Rook, Kind::ProRook],
         }],
     }
-    .enumerate()
+    .enumerate_with_hand_variable_mode(HandVariableMode::Distinguishable)
     .unwrap();
 
     assert_eq!(state.world_count(), 2);
@@ -213,7 +224,7 @@ fn checking_obligation_resolves_rook_to_promoted_rook() {
             candidates: vec![Kind::Rook, Kind::ProRook],
         }],
     }
-    .enumerate()
+    .enumerate_with_hand_variable_mode(HandVariableMode::Distinguishable)
     .unwrap();
 
     let observed = ObservedMove::Move {
@@ -237,7 +248,7 @@ fn allows_initial_check_against_attacker_king() {
         rule: MateRule::Helpmate,
         variables: vec![],
     }
-    .enumerate()
+    .enumerate_with_hand_variable_mode(HandVariableMode::Distinguishable)
     .unwrap();
 
     assert_eq!(state.world_count(), 1);
@@ -255,7 +266,7 @@ fn resolved_variable_is_ordinary_before_its_next_move() {
             candidates: vec![Kind::ProRook],
         }],
     }
-    .enumerate()
+    .enumerate_with_hand_variable_mode(HandVariableMode::Distinguishable)
     .unwrap();
 
     assert_eq!(state.resolved_kind(VariableId(1)), Some(Kind::ProRook));
@@ -288,7 +299,7 @@ fn solves_one_ply_variable_helpmate() {
             candidates: vec![Kind::Rook, Kind::ProRook],
         }],
     }
-    .enumerate()
+    .enumerate_with_hand_variable_mode(HandVariableMode::Distinguishable)
     .unwrap();
 
     let solutions = solve_exact(&state, 1, 10);
@@ -351,7 +362,7 @@ fn enumerates_variable_in_hand_and_can_observe_its_drop() {
             candidates: fmrs_core::piece::KINDS.to_vec(),
         }],
     }
-    .enumerate()
+    .enumerate_with_hand_variable_mode(HandVariableMode::Distinguishable)
     .unwrap();
 
     assert_eq!(state.world_count(), 7);
@@ -381,7 +392,7 @@ fn pawn_drop_mate_world_is_removed_from_a_variable_drop() {
             candidates: fmrs_core::piece::KINDS.to_vec(),
         }],
     }
-    .enumerate()
+    .enumerate_with_hand_variable_mode(HandVariableMode::Distinguishable)
     .unwrap();
     let drop_94 = ObservedMove::Drop {
         identity: DropIdentity::Variable(VariableId(1)),
@@ -436,7 +447,7 @@ fn includes_valid_three_ply_line_even_when_shorter_mates_exist() {
             candidates: fmrs_core::piece::KINDS.to_vec(),
         }],
     }
-    .enumerate()
+    .enumerate_with_hand_variable_mode(HandVariableMode::Distinguishable)
     .unwrap();
 
     let first = ObservedMove::Move {
@@ -573,7 +584,7 @@ fn japanese_notation_uses_same_and_nonpromotion() {
         ],
         rule: MateRule::HelpSelfmate,
     }
-    .enumerate()
+    .enumerate_with_hand_variable_mode(HandVariableMode::Distinguishable)
     .unwrap();
     let solution = vec![
         ObservedMove::Drop {

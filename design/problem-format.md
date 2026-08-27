@@ -4,7 +4,7 @@
 {
   "baseSfen": "9/9/kS7/N8/1L7/9/9/9/9 b - 1",
   "plies": 1,
-  "handVariableMode": "distinguishable",
+  "handVariableMode": "indistinguishable",
   "variables": [
     {
       "id": 1,
@@ -19,7 +19,7 @@
 
 - `baseSfen`: 覆面駒を除いた表示局面。受方持駒は書かない。
 - `plies`: 指定手数。
-- `handVariableMode`: 同じ駒台にある複数の覆面駒の識別方法。省略時は`distinguishable`。
+- `handVariableMode`: 同じ駒台にある複数の覆面駒の識別方法。省略時は`indistinguishable`。
   - `distinguishable`: V1、V2のように個体を指定して打つ。
   - `indistinguishable`: 個体を指定せずに打ち、どの個体だったかは後続の観測から推論する。
 - `variables`: 初形の覆面駒。

@@ -213,7 +213,7 @@ mod tests {
         assert_eq!(document.rule, MateRule::Helpmate);
         assert_eq!(
             document.hand_variable_mode,
-            HandVariableMode::Distinguishable
+            HandVariableMode::Indistinguishable
         );
     }
 

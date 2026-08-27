@@ -131,7 +131,7 @@ function buildProblemDocument(
   plies: number,
   variables: VariableDraft[],
   rule: MateRule = "helpmate",
-  handVariableMode: HandVariableMode = "distinguishable",
+  handVariableMode: HandVariableMode = "indistinguishable",
 ): ProblemDocument {
   return {
     baseSfen,
@@ -198,7 +198,7 @@ const initialProblem = buildProblemJson(
   initialBaseSfen,
   1,
   "helpmate",
-  "distinguishable",
+  "indistinguishable",
   initialVariables,
 );
 
@@ -213,7 +213,7 @@ export function VariableSolver() {
   const [plies, setPlies] = useState(1);
   const [rule, setRule] = useState<MateRule>("helpmate");
   const [handVariableMode, setHandVariableMode] =
-    useState<HandVariableMode>("distinguishable");
+    useState<HandVariableMode>("indistinguishable");
   const [variables, setVariables] = useState<VariableDraft[]>(initialVariables);
   const [selectedId, setSelectedId] = useState<number>(0);
   const [manualProblem, setManualProblem] = useState(initialProblem);
@@ -396,7 +396,7 @@ export function VariableSolver() {
     });
     setPlies(problem.plies);
     setRule(problem.rule ?? "helpmate");
-    setHandVariableMode(problem.handVariableMode ?? "distinguishable");
+    setHandVariableMode(problem.handVariableMode ?? "indistinguishable");
     const loaded = problem.variables.map(problemVariableToDraft);
     setVariables(loaded);
     setSelectedId(0);
@@ -1025,20 +1025,20 @@ function VariableSolveControls(props: {
               inline
               type="radio"
               name="variable-hand-mode"
-              id="variable-hand-mode-distinguishable"
-              label="区別する"
-              checked={props.handVariableMode === "distinguishable"}
-              onChange={() => props.setHandVariableMode!("distinguishable")}
+              id="variable-hand-mode-indistinguishable"
+              label="区別しない"
+              checked={props.handVariableMode === "indistinguishable"}
+              onChange={() => props.setHandVariableMode!("indistinguishable")}
               disabled={props.solving}
             />
             <Form.Check
               inline
               type="radio"
               name="variable-hand-mode"
-              id="variable-hand-mode-indistinguishable"
-              label="区別しない"
-              checked={props.handVariableMode === "indistinguishable"}
-              onChange={() => props.setHandVariableMode!("indistinguishable")}
+              id="variable-hand-mode-distinguishable"
+              label="区別する"
+              checked={props.handVariableMode === "distinguishable"}
+              onChange={() => props.setHandVariableMode!("distinguishable")}
               disabled={props.solving}
             />
           </div>

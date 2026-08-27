@@ -36,7 +36,7 @@ pub struct VariableProblem {
 
 impl VariableProblem {
     pub fn enumerate(self) -> Result<HiddenState> {
-        self.enumerate_with_hand_variable_mode(HandVariableMode::Distinguishable)
+        self.enumerate_with_hand_variable_mode(HandVariableMode::default())
     }
 
     pub fn enumerate_with_hand_variable_mode(

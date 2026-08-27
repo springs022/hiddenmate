@@ -25,7 +25,7 @@ pub struct HiddenState {
 impl HiddenState {
     #[cfg(test)]
     pub(crate) fn new(worlds: Vec<ConcreteWorld>, rule: MateRule) -> Self {
-        Self::new_with_hand_variable_mode(worlds, rule, HandVariableMode::Distinguishable)
+        Self::new_with_hand_variable_mode(worlds, rule, HandVariableMode::default())
     }
 
     pub(crate) fn new_with_hand_variable_mode(

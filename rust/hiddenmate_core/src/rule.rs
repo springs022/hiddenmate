@@ -16,10 +16,10 @@ pub enum MateRule {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum HandVariableMode {
-    /// V1、V2のように個体を選んで打つ現行ルール。
-    #[default]
+    /// V1、V2のように個体を選んで打つルール。
     Distinguishable,
     /// どの個体を打ったかは観測できず、可能な個体をすべて残す。
+    #[default]
     Indistinguishable,
 }
 
