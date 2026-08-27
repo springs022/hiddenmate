@@ -10,12 +10,7 @@ import {
   Spinner,
   Table,
 } from "react-bootstrap";
-import {
-  Color,
-  Position,
-  decodeSfen,
-  encodeSfen,
-} from "../../model";
+import { Color, Position, decodeSfen, encodeSfen } from "../../model";
 import { positionPieceBox } from "../../model/position";
 import { VariableSolverClient } from "../../solve/variable_solver_client";
 import { newState, reduce } from "../state/state";
@@ -68,13 +63,13 @@ interface SavedVariableProblem {
 }
 
 interface SavedVariableProblemStore {
-  version: 1;
+  version: 2;
   positions: SavedVariableProblem[];
 }
 
-const initialBaseSfen = "9/9/kS7/N8/1L7/9/9/9/9 b - 1";
-const singleKingBaseSfen = "4k4/9/9/9/9/9/9/9/9 b - 1";
-const doubleKingBaseSfen = "4k4/9/9/9/9/9/9/9/4K4 b - 1";
+const initialBaseSfen = "9/9/kS7/N8/1L7/9/9/9/8K b 2r2b4g3s3n3l18p 1";
+const singleKingBaseSfen = "4k4/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1";
+const doubleKingBaseSfen = "4k4/9/9/9/9/9/9/9/4K4 b 2r2b4g4s4n4l18p 1";
 const initialVariables: VariableDraft[] = [
   {
     id: 1,
@@ -153,11 +148,28 @@ function loadSavedVariableProblems(): SavedVariableProblem[] {
     if (
       parsed &&
       typeof parsed === "object" &&
-      (parsed as Record<string, unknown>).version === 1
+      (parsed as Record<string, unknown>).version === 2
     ) {
       return validSavedVariableProblems(
         (parsed as Record<string, unknown>).positions,
       ).slice(0, maxSavedPositions);
+    }
+
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      (parsed as Record<string, unknown>).version === 1
+    ) {
+      const legacy = validSavedVariableProblems(
+        (parsed as Record<string, unknown>).positions,
+      );
+      const defaultNames = new Set(
+        defaultSavedVariableProblems().map((position) => position.name),
+      );
+      return [
+        ...defaultSavedVariableProblems(),
+        ...legacy.filter((position) => !defaultNames.has(position.name)),
+      ].slice(0, maxSavedPositions);
     }
 
     // 旧形式（配列）から移行する際だけ、デフォルト2局面を補う。
@@ -241,7 +253,7 @@ export function VariableSolver() {
   useEffect(() => {
     try {
       const store: SavedVariableProblemStore = {
-        version: 1,
+        version: 2,
         positions: savedPositions,
       };
       localStorage.setItem(savedPositionsKey, JSON.stringify(store));
@@ -545,11 +557,6 @@ export function VariableSolver() {
 
         {inputMode === "form" ? (
           <>
-            <VariablePieceBox
-              position={editorState.position}
-              selected={editorState.selected}
-              onClick={(kind) => clickKnownHand("pieceBox", kind)}
-            />
             <Row className="g-4 variable-three-column-layout">
               <Col xl={4} className="variable-layout-board">
                 <VariablePositionEditor
@@ -673,7 +680,7 @@ function VariablePieceBox(props: {
       ? (props.selected.kind ?? "")
       : undefined;
   return (
-    <div className="variable-piece-box border rounded px-3 py-2 mb-3">
+    <div className="variable-piece-box variable-hand mb-2">
       <div className="small text-muted">駒箱</div>
       <Hands
         pieceBox
@@ -803,7 +810,7 @@ function VariablePositionEditor(props: {
       : props.normalSelected.shown && props.normalSelected.ty === "board"
         ? props.normalSelected.pos
         : undefined;
-  const selectedHand = (color: Color) =>
+  const selectedHand = (color: Color | "pieceBox") =>
     props.normalSelected.shown &&
     props.normalSelected.ty === "hand" &&
     props.normalSelected.color === color
@@ -822,6 +829,11 @@ function VariablePositionEditor(props: {
 
   return (
     <div className="variable-position-editor">
+      <VariablePieceBox
+        position={props.position}
+        selected={props.normalSelected}
+        onClick={(kind) => props.clickKnownHand("pieceBox", kind)}
+      />
       <VariableHand
         color="white"
         hands={props.position.hands.white}

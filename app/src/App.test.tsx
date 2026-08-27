@@ -91,6 +91,11 @@ test("places the editor, variable controls, and solve results in three columns",
   expect(solveControls).not.toBeNull();
   expect(panel!.contains(solveControls)).toBe(false);
   expect(columns).toHaveLength(3);
+  const pieceBox = container.querySelector(".variable-piece-box");
+  const whiteHand = container.querySelector(".variable-hand-white");
+  expect(columns[0].contains(pieceBox)).toBe(true);
+  expect(pieceBox?.classList.contains("variable-hand")).toBe(true);
+  expect(pieceBox?.parentElement).toBe(whiteHand?.parentElement);
   expect(columns[1].contains(panel)).toBe(true);
   expect(columns[2].contains(solveControls)).toBe(true);
   const baseSfen = screen.getByLabelText("通常駒のbase SFEN");
@@ -99,26 +104,22 @@ test("places the editor, variable controls, and solve results in three columns",
   expect(
     Boolean(
       baseSfen.compareDocumentPosition(savedPositions!) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      Node.DOCUMENT_POSITION_FOLLOWING,
     ),
   ).toBe(true);
 });
 
-test("moves a standard piece from the piece box onto the board", () => {
+test("starts with ordinary remaining pieces in the white hand", () => {
   const { container } = render(<App />);
   const pieceBox = container.querySelector(".variable-piece-box");
-  const rook = Array.from(pieceBox!.querySelectorAll("span")).find((element) =>
-    element.textContent?.startsWith("飛"),
-  );
+  const whiteHand = container.querySelector(".variable-hand-white");
 
-  expect(rook).not.toBeUndefined();
-  fireEvent.click(rook!);
-  fireEvent.click(screen.getByLabelText("55"));
-
-  expect(screen.getByLabelText("55").textContent).toContain("飛");
+  expect(pieceBox?.textContent).toContain("なし");
+  expect(whiteHand?.textContent).toContain("飛2");
+  expect(whiteHand?.textContent).toContain("歩18");
   expect(
     (screen.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
-  ).toContain("R");
+  ).toContain("2r2b4g3s3n3l18p");
 });
 
 test("moves a selected standard piece by clicking the hand background", () => {
@@ -149,9 +150,13 @@ test("clears piece selections when clicking outside the board and hands", () => 
   expect(silverSquare.style.backgroundColor).toBe("white");
 
   fireEvent.click(variableButton);
-  expect(container.querySelectorAll(".variable-piece-selected")).toHaveLength(1);
+  expect(container.querySelectorAll(".variable-piece-selected")).toHaveLength(
+    1,
+  );
   fireEvent.click(outside);
-  expect(container.querySelectorAll(".variable-piece-selected")).toHaveLength(0);
+  expect(container.querySelectorAll(".variable-piece-selected")).toHaveLength(
+    0,
+  );
 });
 
 test("shifts standard and variable pieces together", () => {
@@ -188,8 +193,46 @@ test("loads the default single-king position from saved positions", () => {
 
   expect(
     (screen.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
-  ).toBe("4k4/9/9/9/9/9/9/9/9 b - 1");
+  ).toBe("4k4/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1");
   expect(container.querySelector(".variable-piece")).toBeNull();
+});
+
+test("migrates saved positions while refreshing built-in defaults", () => {
+  localStorage.setItem(
+    "hiddenmate_variable_saved_positions",
+    JSON.stringify({
+      version: 1,
+      positions: [
+        {
+          name: "単玉のみ",
+          problem: {
+            baseSfen: "9/9/9/9/9/9/9/9/9 b - 1",
+            plies: 1,
+            variables: [],
+          },
+        },
+        {
+          name: "ユーザー局面",
+          problem: {
+            baseSfen: "4k4/9/9/9/9/9/9/9/9 b - 1",
+            plies: 1,
+            variables: [],
+          },
+        },
+      ],
+    }),
+  );
+
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "単玉のみ" }));
+
+  expect(
+    (screen.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
+  ).toBe("4k4/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1");
+  expect(screen.getByRole("button", { name: "ユーザー局面" })).not.toBeNull();
+  expect(localStorage.getItem("hiddenmate_variable_saved_positions")).toContain(
+    '"version":2',
+  );
 });
 
 test("keeps a newly added variable unselected", () => {

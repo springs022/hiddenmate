@@ -119,7 +119,7 @@ mod hiddenmate_tests {
     #[test]
     fn solves_variable_problem_for_web() {
         let json = r#"{
-            "baseSfen": "9/9/kS7/N8/1L7/9/9/9/9 b - 1",
+            "baseSfen": "9/9/kS7/N8/1L7/9/9/9/8K b 2r2b4g3s3n3l18p 1",
             "plies": 1,
             "variables": [{
                 "id": 1,
