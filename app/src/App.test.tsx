@@ -1,6 +1,16 @@
 import React from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { vi } from "vitest";
+
+vi.mock("./wasm_api", () => ({
+  Algorithm: {},
+  BackwardSearch: class {},
+  Solver: class {},
+  check_one_way_mate: vi.fn(),
+  is_white_in_check: vi.fn(() => false),
+  solve_variable_problem: vi.fn(),
+}));
+
 import App from "./App";
 
 const workerInstances: MockWorker[] = [];
