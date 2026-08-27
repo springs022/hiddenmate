@@ -51,7 +51,10 @@ test("renders HiddenMate title", () => {
   expect(screen.getByText("覆面駒版 β")).not.toBeNull();
   expect(screen.getByRole("heading", { name: "透明駒" })).not.toBeNull();
   expect(screen.getByText(/透明駒の検討機能は開発中です/)).not.toBeNull();
-  expect(screen.getByRole("heading", { name: "はじめに" })).not.toBeNull();
+  expect(
+    screen.queryByText(/現在は覆面駒の検討機能をご利用ください/),
+  ).toBeNull();
+  expect(screen.queryByRole("heading", { name: "はじめに" })).toBeNull();
   expect(screen.getByRole("button", { name: "盤面・フォーム" })).not.toBeNull();
   expect(screen.getByLabelText("通常駒のbase SFEN")).not.toBeNull();
   expect(screen.queryByText("受方駒台")).toBeNull();
@@ -326,6 +329,7 @@ test("treats a board double tap like a right click", () => {
 test("copies the generated problem JSON", async () => {
   render(<App />);
 
+  fireEvent.click(screen.getByRole("button", { name: "JSON詳細編集" }));
   fireEvent.click(screen.getByRole("button", { name: "問題JSONをコピー" }));
 
   expect(navigator.clipboard.writeText).toHaveBeenCalledWith(

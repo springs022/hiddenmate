@@ -489,21 +489,6 @@ export function VariableSolver() {
         覆面駒
       </Card.Header>
       <Card.Body>
-        <Alert variant="info" className="small">
-          <Alert.Heading as="h3" className="h6">
-            はじめに
-          </Alert.Heading>
-          <ul className="mb-0 ps-3">
-            <li>入力済みのサンプルは、そのまま「検討」を押して試せます。</li>
-            <li>
-              通常駒は駒を選んで移動先をクリックします。右クリック（スマートフォンではダブルタップ）で成・所属などを切り替えます。
-            </li>
-            <li>
-              覆面駒は「覆面駒一覧」で選択し、盤または駒台をクリックして配置します。
-            </li>
-            <li>受方持駒は標準駒数から自動的に補完されます。</li>
-          </ul>
-        </Alert>
         <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
           <ButtonGroup aria-label="問題入力方法">
             <Button
@@ -519,10 +504,6 @@ export function VariableSolver() {
               JSON詳細編集
             </Button>
           </ButtonGroup>
-          <CopyButton
-            text={inputMode === "form" ? generatedProblem : manualProblem}
-            idleLabel="問題JSONをコピー"
-          />
         </div>
 
         {inputMode === "form" ? (
@@ -611,9 +592,12 @@ export function VariableSolver() {
                 spellCheck={false}
               />
             </Form.Group>
-            <Button variant="outline-secondary" onClick={loadJsonIntoForm}>
-              JSONをフォームに反映
-            </Button>
+            <div className="d-flex flex-wrap gap-2">
+              <Button variant="outline-secondary" onClick={loadJsonIntoForm}>
+                JSONをフォームに反映
+              </Button>
+              <CopyButton text={manualProblem} idleLabel="問題JSONをコピー" />
+            </div>
           </div>
         )}
 

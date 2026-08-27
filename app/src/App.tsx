@@ -18,9 +18,7 @@ function App() {
           透明駒
         </Card.Header>
         <Card.Body>
-          <p className="mb-0">
-            透明駒の検討機能は開発中です。現在は覆面駒の検討機能をご利用ください。
-          </p>
+          <p className="mb-0">透明駒の検討機能は開発中です。</p>
         </Card.Body>
       </Card>
       <footer className="border-top mt-4 py-3 small text-secondary">
