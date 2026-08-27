@@ -812,16 +812,15 @@ function VariablePositionEditor(props: {
         selectedId={props.selected?.id}
         onVariableClick={props.selectVariable}
       />
-      <Shifter onShift={props.shiftBoard}>
-        <CoordinateBoard
-          position={props.position}
-          variables={props.variables}
-          selectedId={props.selected?.id}
-          selectedPosition={boardSelected}
-          onClick={props.clickBoard}
-          onRightClick={props.rightClickBoard}
-        />
-      </Shifter>
+      <CoordinateBoard
+        position={props.position}
+        variables={props.variables}
+        selectedId={props.selected?.id}
+        selectedPosition={boardSelected}
+        onClick={props.clickBoard}
+        onRightClick={props.rightClickBoard}
+        onShift={props.shiftBoard}
+      />
       <VariableHand
         color="black"
         hands={props.position.hands.black}
@@ -901,6 +900,7 @@ function CoordinateBoard(props: {
   selectedPosition?: [number, number];
   onClick: (position: [number, number]) => void;
   onRightClick: (position: [number, number]) => void;
+  onShift: (direction: ShiftDirection) => void;
 }) {
   return (
     <div className="variable-board-coordinate-shell my-2">
@@ -910,51 +910,53 @@ function CoordinateBoard(props: {
         ))}
       </div>
       <div className="d-flex align-items-start">
-        <div className="variable-board-wrap">
-          <Board
-            pieces={props.position.board}
-            selected={props.selectedPosition}
-            onClick={props.onClick}
-            onRightClick={props.onRightClick}
-            overlay={([row, col]) => {
-              const square = `${col + 1}${row + 1}`;
-              const variable = props.variables.find(
-                (candidate) =>
-                  candidate.location.type === "board" &&
-                  candidate.location.square === square,
-              );
-              return variable ? (
-                <div
-                  className={`variable-piece variable-piece-${variable.color}${
-                    props.selectedId === variable.id
-                      ? " variable-piece-selected"
-                      : ""
-                  }`}
-                  style={{
-                    transform:
-                      variable.color === "white"
-                        ? "rotate(180deg)"
-                        : "rotate(0deg)",
-                  }}
-                >
-                  <span className="variable-owner-mark">
-                    {variable.color === "black" ? "▲" : "△"}
-                  </span>
-                  V{variable.id}
-                </div>
-              ) : undefined;
-            }}
-            squareLabel={([row, col]) => {
-              const square = `${col + 1}${row + 1}`;
-              const variable = props.variables.find(
-                (candidate) =>
-                  candidate.location.type === "board" &&
-                  candidate.location.square === square,
-              );
-              return variable ? `${square} V${variable.id}` : square;
-            }}
-          />
-        </div>
+        <Shifter onShift={props.onShift}>
+          <div className="variable-board-wrap">
+            <Board
+              pieces={props.position.board}
+              selected={props.selectedPosition}
+              onClick={props.onClick}
+              onRightClick={props.onRightClick}
+              overlay={([row, col]) => {
+                const square = `${col + 1}${row + 1}`;
+                const variable = props.variables.find(
+                  (candidate) =>
+                    candidate.location.type === "board" &&
+                    candidate.location.square === square,
+                );
+                return variable ? (
+                  <div
+                    className={`variable-piece variable-piece-${variable.color}${
+                      props.selectedId === variable.id
+                        ? " variable-piece-selected"
+                        : ""
+                    }`}
+                    style={{
+                      transform:
+                        variable.color === "white"
+                          ? "rotate(180deg)"
+                          : "rotate(0deg)",
+                    }}
+                  >
+                    <span className="variable-owner-mark">
+                      {variable.color === "black" ? "▲" : "△"}
+                    </span>
+                    V{variable.id}
+                  </div>
+                ) : undefined;
+              }}
+              squareLabel={([row, col]) => {
+                const square = `${col + 1}${row + 1}`;
+                const variable = props.variables.find(
+                  (candidate) =>
+                    candidate.location.type === "board" &&
+                    candidate.location.square === square,
+                );
+                return variable ? `${square} V${variable.id}` : square;
+              }}
+            />
+          </div>
+        </Shifter>
         <div className="variable-rank-labels" aria-hidden="true">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((rank) => (
             <span key={rank}>{rank}</span>

@@ -35,13 +35,11 @@ export function Shifter(props: ShifterProps) {
   }
 
   return (
-    <div className="fit-content">
+    <div className="fit-content shifter">
       {cursors.get("up")}
-      <div className="d-inline-flex">
-        {cursors.get("left")}
-        <span>{props.children}</span>
-        {cursors.get("right")}
-      </div>
+      {cursors.get("left")}
+      <div className="shifter-content">{props.children}</div>
+      {cursors.get("right")}
       {cursors.get("down")}
     </div>
   );
@@ -57,7 +55,9 @@ function Cursor(props: { direction: ShiftDirection; onClick: () => void }) {
     right: "▷",
   }[props.direction];
   return (
-    <div className="text-secondary d-flex align-items-center justify-content-center user-select-none">
+    <div
+      className={`shifter-cursor shifter-cursor-${props.direction} text-secondary d-flex align-items-center justify-content-center user-select-none`}
+    >
       <span
         title={`${props.direction} shift`}
         onClick={props.onClick}

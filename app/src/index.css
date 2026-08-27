@@ -93,6 +93,44 @@ code {
   width: fit-content;
 }
 
+.shifter {
+  position: relative;
+  width: fit-content;
+}
+
+.shifter-cursor {
+  position: absolute;
+  z-index: 1;
+}
+
+.shifter-cursor-up,
+.shifter-cursor-down {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.shifter-cursor-up {
+  bottom: calc(100% - 0.2rem);
+}
+
+.shifter-cursor-down {
+  top: calc(100% - 0.2rem);
+}
+
+.shifter-cursor-left,
+.shifter-cursor-right {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.shifter-cursor-left {
+  right: 100%;
+}
+
+.shifter-cursor-right {
+  left: 100%;
+}
+
 .variable-file-labels {
   display: grid;
   grid-template-columns: repeat(9, 32px);
@@ -160,6 +198,10 @@ code {
 }
 
 @media (max-width: 575.98px) {
+  div.fit-content {
+    text-align: center;
+  }
+
   .variable-add-buttons {
     flex-direction: column;
   }
