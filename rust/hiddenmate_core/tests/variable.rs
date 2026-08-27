@@ -12,6 +12,45 @@ fn square(file: usize, rank: usize) -> Square {
 }
 
 #[test]
+fn solution_count_ignores_variable_ids_in_both_hand_modes() {
+    let problem = VariableProblem {
+        base_sfen: "9/9/kS7/9/1L7/9/9/9/9 b - 1".to_string(),
+        rule: MateRule::Helpmate,
+        variables: vec![
+            VariableSpec {
+                id: VariableId(1),
+                color: Color::BLACK,
+                location: VariableLocation::Hand(Color::BLACK),
+                candidates: fmrs_core::piece::KINDS[..7].to_vec(),
+            },
+            VariableSpec {
+                id: VariableId(2),
+                color: Color::BLACK,
+                location: VariableLocation::Hand(Color::BLACK),
+                candidates: fmrs_core::piece::KINDS[..7].to_vec(),
+            },
+        ],
+    };
+
+    for state in [
+        problem.clone().enumerate().unwrap(),
+        problem
+            .enumerate_with_hand_variable_mode(HandVariableMode::Indistinguishable)
+            .unwrap(),
+    ] {
+        let solutions = solve_exact(&state, 1, 100);
+        assert_eq!(solutions.len(), 3);
+        assert_eq!(
+            solutions
+                .iter()
+                .map(|solution| format_solution_japanese(&state, solution))
+                .collect::<Vec<_>>(),
+            vec![vec!["82▲打"], vec!["92▲打"], vec!["94▲打"]]
+        );
+    }
+}
+
+#[test]
 fn indistinguishable_hand_variables_branch_then_resolve_which_one_remains() {
     // V1（金・銀）とV2（飛・香）を区別せず55へ打つ。54玉から43玉の後、
     // 55の覆面駒を44へ動かせるのはV1だけなので、駒台に残った駒がV2と確定する。

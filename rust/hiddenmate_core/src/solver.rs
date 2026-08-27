@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use fmrs_core::{
     piece::{Color, Kind},
     position::Square,
@@ -202,6 +204,7 @@ pub fn solve_exact(initial: &HiddenState, plies: usize, max_solutions: usize) ->
     }
 
     let mut solutions = Vec::new();
+    let mut solution_keys = BTreeSet::new();
     for depth in 0..=plies {
         let turn_at_depth = if depth % 2 == 0 {
             initial.turn()
@@ -213,7 +216,14 @@ pub fn solve_exact(initial: &HiddenState, plies: usize, max_solutions: usize) ->
         }
 
         let mut path = Vec::with_capacity(depth);
-        solve_inner(initial, depth, max_solutions, &mut path, &mut solutions);
+        solve_inner(
+            initial,
+            depth,
+            max_solutions,
+            &mut path,
+            &mut solutions,
+            &mut solution_keys,
+        );
         if solutions.len() >= max_solutions {
             break;
         }
@@ -227,12 +237,13 @@ fn solve_inner(
     max_solutions: usize,
     path: &mut Solution,
     solutions: &mut Vec<Solution>,
+    solution_keys: &mut BTreeSet<Vec<ObservedMove>>,
 ) {
     if solutions.len() >= max_solutions {
         return;
     }
     if remaining == 0 {
-        if state.is_proven_mate() {
+        if state.is_proven_mate() && solution_keys.insert(solution_key(path)) {
             solutions.push(path.clone());
         }
         return;
@@ -246,12 +257,48 @@ fn solve_inner(
             continue;
         };
         path.push(observed);
-        solve_inner(&next, remaining - 1, max_solutions, path, solutions);
+        solve_inner(
+            &next,
+            remaining - 1,
+            max_solutions,
+            path,
+            solutions,
+            solution_keys,
+        );
         path.pop();
         if solutions.len() >= max_solutions {
             break;
         }
     }
+}
+
+/// 覆面駒の個体IDだけが異なる手順は、同じ表示解として数える。
+fn solution_key(solution: &[ObservedMove]) -> Vec<ObservedMove> {
+    solution
+        .iter()
+        .copied()
+        .map(|observed| match observed {
+            ObservedMove::Move {
+                identity: MoveIdentity::Variable(_),
+                source,
+                destination,
+                promote,
+            } => ObservedMove::Move {
+                identity: MoveIdentity::AnonymousVariable,
+                source,
+                destination,
+                promote,
+            },
+            ObservedMove::Drop {
+                identity: DropIdentity::Variable(_),
+                destination,
+            } => ObservedMove::Drop {
+                identity: DropIdentity::AnonymousVariable,
+                destination,
+            },
+            _ => observed,
+        })
+        .collect()
 }
 
 #[cfg(test)]
