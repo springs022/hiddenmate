@@ -1244,6 +1244,7 @@ function VariableResult(props: VariableSolveResult) {
     <div aria-live="polite">
       <p className="mb-0">
         {props.rule === "helpSelfmate" ? "協力自玉詰" : "協力詰"}
+        {" "}
         {props.plies}手
       </p>
       <p>

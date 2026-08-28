@@ -461,7 +461,7 @@ test("copies a formatted solve result", async () => {
     } as MessageEvent);
   });
 
-  expect(await screen.findByText("協力自玉詰4手")).not.toBeNull();
+  expect(await screen.findByText("協力自玉詰 4手")).not.toBeNull();
   expect(screen.getByText(/初形候補世界:/)).not.toBeNull();
 
   fireEvent.click(await screen.findByRole("button", { name: "解答をコピー" }));
