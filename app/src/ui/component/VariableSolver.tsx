@@ -55,6 +55,12 @@ interface VariableSolveResponse {
   solutions: string[][];
 }
 
+interface VariableSolveResult {
+  response: VariableSolveResponse;
+  rule: MateRule;
+  plies: number;
+}
+
 type CopyState = "idle" | "copied" | "error";
 
 interface SavedVariableProblem {
@@ -225,7 +231,7 @@ export function VariableSolver() {
   const [selectedId, setSelectedId] = useState<number>(0);
   const [manualProblem, setManualProblem] = useState(initialProblem);
   const [maxSolutions, setMaxSolutions] = useState(100);
-  const [response, setResponse] = useState<VariableSolveResponse>();
+  const [result, setResult] = useState<VariableSolveResult>();
   const [error, setError] = useState<string>();
   const [solving, setSolving] = useState(false);
   const solverClient = useRef<VariableSolverClient>();
@@ -291,7 +297,7 @@ export function VariableSolver() {
       setSolving(false);
     }
     setError(undefined);
-    setResponse(undefined);
+    setResult(undefined);
   };
 
   const shiftBoard = (direction: ShiftDirection) => {
@@ -508,7 +514,7 @@ export function VariableSolver() {
 
     if (inputMode === "form" && variables.length === 0) {
       setError("覆面駒を1枚以上追加してください");
-      setResponse(undefined);
+      setResult(undefined);
       return;
     }
 
@@ -518,12 +524,19 @@ export function VariableSolver() {
       const client =
         solverClient.current ??
         (solverClient.current = new VariableSolverClient());
-      const json = await client.solve(
-        inputMode === "form" ? generatedProblem : manualProblem,
-        maxSolutions,
-      );
+      const problemJson =
+        inputMode === "form" ? generatedProblem : manualProblem;
+      const json = await client.solve(problemJson, maxSolutions);
       if (json !== undefined) {
-        setResponse(JSON.parse(json) as VariableSolveResponse);
+        const problem: unknown = JSON.parse(problemJson);
+        if (!isProblemDocument(problem)) {
+          throw new Error("問題JSONの形式が正しくありません");
+        }
+        setResult({
+          response: JSON.parse(json) as VariableSolveResponse,
+          rule: problem.rule ?? "helpmate",
+          plies: problem.plies,
+        });
       }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -623,7 +636,7 @@ export function VariableSolver() {
                   onSolve={solve}
                 />
                 {error && <Alert variant="danger">{error}</Alert>}
-                {response && <VariableResult response={response} />}
+                {result && <VariableResult {...result} />}
               </Col>
             </Row>
           </>
@@ -660,7 +673,7 @@ export function VariableSolver() {
               onSolve={solve}
             />
             {error && <Alert variant="danger">{error}</Alert>}
-            {response && <VariableResult response={response} />}
+            {result && <VariableResult {...result} />}
           </div>
         )}
       </Card.Body>
@@ -1225,10 +1238,14 @@ function VariableSolveControls(props: {
   );
 }
 
-function VariableResult(props: { response: VariableSolveResponse }) {
+function VariableResult(props: VariableSolveResult) {
   const copyText = formatResultForCopy(props.response);
   return (
     <div aria-live="polite">
+      <p className="mb-0">
+        {props.rule === "helpSelfmate" ? "協力自玉詰" : "協力詰"}
+        {props.plies}手
+      </p>
       <p>
         初形候補世界: <strong>{props.response.worldCount}</strong> ／ 解数:{" "}
         <strong>{props.response.solutions.length}</strong>

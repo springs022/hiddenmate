@@ -441,6 +441,10 @@ test("copies the generated problem JSON", async () => {
 
 test("copies a formatted solve result", async () => {
   render(<App />);
+  fireEvent.click(screen.getByLabelText("協力自玉詰"));
+  fireEvent.change(screen.getByLabelText("手数"), {
+    target: { value: "4" },
+  });
   fireEvent.click(screen.getByRole("button", { name: "検討" }));
   act(() => {
     workerInstances[0].onmessage?.({ data: { type: "ready" } } as MessageEvent);
@@ -456,6 +460,9 @@ test("copies a formatted solve result", async () => {
       },
     } as MessageEvent);
   });
+
+  expect(await screen.findByText("協力自玉詰4手")).not.toBeNull();
+  expect(screen.getByText(/初形候補世界:/)).not.toBeNull();
 
   fireEvent.click(await screen.findByRole("button", { name: "解答をコピー" }));
 
