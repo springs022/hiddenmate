@@ -1354,27 +1354,15 @@ async function copyToClipboard(text: string): Promise<void> {
 }
 
 function formatResultForCopy(response: VariableSolveResponse): string {
-  const candidates = response.candidates.map(
-    (candidate) =>
-      `V${candidate.id}: ${candidate.kinds.map(japaneseCandidateKind).join("、") || "なし"}`,
-  );
-  const solutions =
-    response.solutions.length === 0
-      ? ["解なし"]
-      : response.solutions.map(
-          (solution, index) =>
-            `${index + 1}. ${solution.join(" ")} まで ${solution.length}手`,
-        );
-  return [
-    `初形候補世界: ${response.worldCount}`,
-    `解数: ${response.solutions.length}`,
-    "",
-    "初形での駒種候補",
-    ...candidates,
-    "",
-    "解答",
-    ...solutions,
-  ].join("\n");
+  if (response.solutions.length === 0) {
+    return "解なし";
+  }
+  return response.solutions
+    .map(
+      (solution, index) =>
+        `${index + 1}. ${solution.join(" ")} まで ${solution.length}手`,
+    )
+    .join("\n");
 }
 
 function japaneseCandidateKind(kind: string): string {

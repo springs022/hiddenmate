@@ -439,7 +439,7 @@ test("copies the generated problem JSON", async () => {
   expect(await screen.findByText("コピーしました")).not.toBeNull();
 });
 
-test("copies a formatted solve result", async () => {
+test("copies only formatted solutions", async () => {
   render(<App />);
   fireEvent.click(screen.getByLabelText("協力自玉詰"));
   fireEvent.change(screen.getByLabelText("手数"), {
@@ -455,7 +455,7 @@ test("copies a formatted solve result", async () => {
         responseJson: JSON.stringify({
           worldCount: 1,
           candidates: [{ id: 1, kinds: ["R"] }],
-          solutions: [["82▲(64)"]],
+          solutions: [["82▲(64)"], ["82▲成(64)"], ["84▲(64)"]],
         }),
       },
     } as MessageEvent);
@@ -467,6 +467,10 @@ test("copies a formatted solve result", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "解答をコピー" }));
 
   expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-    expect.stringContaining("1. 82▲(64) まで 1手"),
+    [
+      "1. 82▲(64) まで 1手",
+      "2. 82▲成(64) まで 1手",
+      "3. 84▲(64) まで 1手",
+    ].join("\n"),
   );
 });
