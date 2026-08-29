@@ -1,5 +1,5 @@
 import React from "react";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { vi } from "vitest";
 
 vi.mock("./wasm_api", () => ({
@@ -59,6 +59,10 @@ test("renders HiddenMate title", () => {
   expect(homepageLink.getAttribute("rel")).toBe("noopener noreferrer");
   expect(screen.getByText("覆面駒・透明駒の検討")).not.toBeNull();
   expect(screen.getByRole("heading", { name: "覆面駒" })).not.toBeNull();
+  expect(
+    screen.getByRole("heading", { name: "透明駒（駒種指定）" }),
+  ).not.toBeNull();
+  expect(screen.getByRole("button", { name: "入力を開く" })).not.toBeNull();
   expect(screen.queryByText("覆面駒版 β")).toBeNull();
   expect(screen.getByRole("heading", { name: "透明駒" })).not.toBeNull();
   expect(screen.getByText(/透明駒の検討機能は開発中です/)).not.toBeNull();
@@ -90,6 +94,99 @@ test("renders HiddenMate title", () => {
   expect(screen.getByRole("button", { name: "検討" })).not.toBeNull();
   expect(screen.getByRole("heading", { name: "保存局面" })).not.toBeNull();
   expect(screen.queryByRole("heading", { name: "通常協力詰" })).toBeNull();
+});
+
+test("configures at most two known-kind invisible pieces", () => {
+  const { container } = render(<App />);
+  const openButton = screen.getByRole("button", { name: "入力を開く" });
+  expect(openButton.closest(".card-header")).not.toBeNull();
+  expect(openButton.textContent).toBe("");
+  fireEvent.click(openButton);
+  const solver = container.querySelector(".known-invisible-solver")!;
+  const panel = within(solver as HTMLElement);
+  const description = panel.getByText(
+    "駒種と所属が分かっていて、位置だけが不明な透明駒です。合計2枚まで指定できます。",
+  );
+  const modeGroup = panel.getByRole("group", {
+    name: "透明駒（駒種指定）の問題入力方法",
+  });
+  expect(
+    description.compareDocumentPosition(modeGroup) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).not.toBe(0);
+  expect(panel.getByRole("button", { name: "盤面・フォーム" })).not.toBeNull();
+  expect(panel.getByLabelText("手数")).not.toBeNull();
+  expect(panel.queryByText("最大手数")).toBeNull();
+  expect(panel.getByRole("button", { name: "双玉のみ" })).not.toBeNull();
+  expect(
+    panel.queryByRole("button", { name: "双玉・残り全部受方持駒" }),
+  ).toBeNull();
+  expect(solver.querySelector(".variable-solve-controls")).not.toBeNull();
+  expect(solver.querySelector(".variable-solve-actions")).not.toBeNull();
+  expect(
+    (panel.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
+  ).toBe("4k4/9/9/9/9/9/9/9/4K4 b 2r2b4g4s4n4l18p 1");
+  expect(solver.querySelector(".variable-piece-box")?.textContent).toContain("なし");
+  const whiteKing = panel.getByRole("button", { name: "受方玉を増やす" });
+  const blackRook = panel.getByRole("button", { name: "攻方飛を増やす" });
+  fireEvent.click(whiteKing);
+  fireEvent.click(blackRook);
+
+  expect((whiteKing as HTMLButtonElement).disabled).toBe(true);
+  expect((blackRook as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(panel.getByRole("button", { name: "JSON詳細編集" }));
+  const problemJson = panel.getByLabelText("問題JSON") as HTMLTextAreaElement;
+  expect(problemJson.value).toContain('"kind": "K"');
+  expect(problemJson.value).toContain('"kind": "R"');
+});
+
+test("shows known invisible rule, plies, and piece summary above counts", async () => {
+  const { container } = render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "入力を開く" }));
+  const solver = container.querySelector(".known-invisible-solver")!;
+  const panel = within(solver as HTMLElement);
+  fireEvent.click(panel.getByRole("button", { name: "JSON詳細編集" }));
+  fireEvent.change(panel.getByLabelText("問題JSON"), {
+    target: {
+      value: JSON.stringify({
+        baseSfen: "7k1/9/7K1/9/9/9/9/9/9 b - 1",
+        plies: 5,
+        rule: "helpmate",
+        invisibles: [
+          { color: "white", kind: "+R", count: 1 },
+          { color: "black", kind: "B", count: 1 },
+        ],
+      }),
+    },
+  });
+  fireEvent.click(panel.getByRole("button", { name: "検討" }));
+  act(() => {
+    workerInstances[0].onmessage?.({ data: { type: "ready" } } as MessageEvent);
+    workerInstances[0].onmessage?.({
+      data: {
+        type: "solved",
+        requestId: 1,
+        responseJson: JSON.stringify({
+          worldCount: 71,
+          solutions: Array.from({ length: 6 }, () => ["X"]),
+        }),
+      },
+    } as MessageEvent);
+  });
+
+  const ruleSummary = await panel.findByText("協力詰 5手");
+  const pieceSummary = panel.getByText("攻方透明角1枚、受方透明龍1枚");
+  const countsSummary = panel.getByText(/初形候補世界:/);
+  expect(
+    ruleSummary.compareDocumentPosition(pieceSummary) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).not.toBe(0);
+  expect(
+    pieceSummary.compareDocumentPosition(countsSummary) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).not.toBe(0);
+  expect(countsSummary.textContent).toContain("71");
+  expect(countsSummary.textContent).toContain("6");
 });
 
 test("places the editor, variable controls, and solve results in three columns", () => {

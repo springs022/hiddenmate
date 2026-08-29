@@ -1,0 +1,8 @@
+{
+  "baseSfen": "4k4/9/9/9/9/9/9/9/4K4 b - 1",
+  "plies": 3,
+  "rule": "helpmate",
+  "invisibles": [
+    { "color": "black", "kind": "R", "count": 1 }
+  ]
+}

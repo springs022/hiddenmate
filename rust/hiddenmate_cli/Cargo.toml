@@ -13,3 +13,4 @@ path = "src/main.rs"
 anyhow = "*"
 clap = { version = "*", features = ["derive"] }
 hiddenmate_core = { path = "../hiddenmate_core" }
+serde_json = "*"

@@ -1,6 +1,7 @@
 import "bootstrap/dist/css/bootstrap.min.css";
 import { Card } from "react-bootstrap";
 import { VariableSolver } from "./ui/component/VariableSolver";
+import { KnownInvisibleSolver } from "./ui/component/KnownInvisibleSolver";
 
 declare const FMRS_BASE_PATH: string;
 
@@ -20,6 +21,7 @@ function App() {
       </div>
       <p>覆面駒・透明駒の検討</p>
       <VariableSolver />
+      <KnownInvisibleSolver />
       <Card className="mb-4">
         <Card.Header as="h2" className="h5 mb-0">
           透明駒

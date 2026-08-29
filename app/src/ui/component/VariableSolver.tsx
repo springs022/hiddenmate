@@ -839,7 +839,7 @@ function VariableSavedPositions(props: {
   );
 }
 
-function VariablePositionEditor(props: {
+export function VariablePositionEditor(props: {
   position: Position;
   normalSelected: ReturnType<typeof newState>["selected"];
   variables: VariableDraft[];
@@ -1125,7 +1125,8 @@ function VariableControls(props: {
   );
 }
 
-function VariableSolveControls(props: {
+export function VariableSolveControls(props: {
+  idPrefix?: string;
   plies?: number;
   setPlies?: (plies: number) => void;
   rule?: MateRule;
@@ -1137,6 +1138,7 @@ function VariableSolveControls(props: {
   solving: boolean;
   onSolve: () => void;
 }) {
+  const idPrefix = props.idPrefix ?? "variable";
   const [pliesInput, setPliesInput] = useState(
     props.plies === undefined ? "" : String(props.plies),
   );
@@ -1152,15 +1154,15 @@ function VariableSolveControls(props: {
       {props.rule !== undefined && props.setRule && (
         <Form.Group
           className="variable-solve-group variable-rule"
-          controlId="variable-rule"
+          controlId={`${idPrefix}-rule`}
         >
           <Form.Label>ルール</Form.Label>
           <div className="d-flex gap-2 text-nowrap">
             <Form.Check
               inline
               type="radio"
-              name="variable-rule"
-              id="variable-rule-helpmate"
+              name={`${idPrefix}-rule`}
+              id={`${idPrefix}-rule-helpmate`}
               label="協力詰"
               checked={props.rule === "helpmate"}
               onChange={() => props.setRule!("helpmate")}
@@ -1169,8 +1171,8 @@ function VariableSolveControls(props: {
             <Form.Check
               inline
               type="radio"
-              name="variable-rule"
-              id="variable-rule-help-selfmate"
+              name={`${idPrefix}-rule`}
+              id={`${idPrefix}-rule-help-selfmate`}
               label="協力自玉詰"
               checked={props.rule === "helpSelfmate"}
               onChange={() => props.setRule!("helpSelfmate")}
@@ -1213,7 +1215,7 @@ function VariableSolveControls(props: {
         {props.plies !== undefined && props.setPlies && (
           <Form.Group
             className="variable-control-number"
-            controlId="variable-plies"
+            controlId={`${idPrefix}-plies`}
           >
             <Form.Label>手数</Form.Label>
             <Form.Control
@@ -1240,7 +1242,7 @@ function VariableSolveControls(props: {
         )}
         <Form.Group
           className="variable-control-number"
-          controlId="variable-max-solutions"
+          controlId={`${idPrefix}-max-solutions`}
         >
           <Form.Label>最大解数</Form.Label>
           <Form.Control

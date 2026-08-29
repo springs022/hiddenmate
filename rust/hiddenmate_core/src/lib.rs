@@ -5,6 +5,7 @@
 //! `Kind` に追加しないため、既存の高速な合法手生成をそのまま利用できる。
 
 mod format;
+mod known_invisible;
 mod observed;
 mod problem;
 mod rule;
@@ -13,6 +14,11 @@ mod state;
 mod world;
 
 pub use format::ProblemDocument;
+pub use known_invisible::{
+    format_known_invisible_solution_japanese, solve_known_invisible_exact, KnownInvisibleDocument,
+    KnownInvisibleObservedMove, KnownInvisibleProblem, KnownInvisibleSolution, KnownInvisibleSpec,
+    KnownInvisibleState,
+};
 pub use observed::{DropIdentity, MoveIdentity, ObservedMove};
 pub use problem::{VariableProblem, VariableSpec};
 pub use rule::{HandVariableMode, MateRule};

@@ -3,7 +3,10 @@ mod solver;
 mod utils;
 
 use fmrs_core::piece::Kind;
-use hiddenmate_core::{format_solution_japanese, solve_exact, ProblemDocument};
+use hiddenmate_core::{
+    format_known_invisible_solution_japanese, format_solution_japanese, solve_exact,
+    solve_known_invisible_exact, KnownInvisibleDocument, ProblemDocument,
+};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -112,6 +115,34 @@ fn kind_code(kind: Kind) -> &'static str {
     }
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct KnownInvisibleSolveResponse {
+    world_count: usize,
+    solutions: Vec<Vec<String>>,
+}
+
+/// 駒種を指定した透明駒問題JSONを解き、Web UI向けのJSONを返す。
+#[wasm_bindgen]
+pub fn solve_known_invisible_problem(json: &str, max_solutions: u32) -> Result<String, JsValue> {
+    solve_known_invisible_problem_json(json, max_solutions as usize)
+        .map_err(|error| JsValue::from_str(&format!("{error:#}")))
+}
+
+fn solve_known_invisible_problem_json(json: &str, max_solutions: usize) -> anyhow::Result<String> {
+    let document = KnownInvisibleDocument::from_json(json)?;
+    let (problem, plies) = document.into_problem()?;
+    let state = problem.enumerate()?;
+    let solutions = solve_known_invisible_exact(&state, plies, max_solutions)?
+        .iter()
+        .map(|solution| format_known_invisible_solution_japanese(&state, solution))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    Ok(serde_json::to_string(&KnownInvisibleSolveResponse {
+        world_count: state.world_count(),
+        solutions,
+    })?)
+}
+
 #[cfg(test)]
 mod hiddenmate_tests {
     use super::*;
@@ -213,5 +244,18 @@ mod hiddenmate_tests {
             .as_array()
             .unwrap()
             .contains(&serde_json::json!("K")));
+    }
+
+    #[test]
+    fn validates_known_invisible_problem_for_web() {
+        let json = r#"{
+            "baseSfen":"9/9/k8/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1",
+            "plies":1,
+            "invisibles":[{"color":"black","kind":"K","count":1}]
+        }"#;
+        let response = solve_known_invisible_problem_json(json, 0).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&response).unwrap();
+        assert!(value["worldCount"].as_u64().unwrap() > 1);
+        assert_eq!(value["solutions"], serde_json::json!([]));
     }
 }
