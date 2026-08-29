@@ -55,7 +55,7 @@ test("renders HiddenMate title", () => {
   expect(screen.getByRole("heading", { name: "HiddenMate" })).not.toBeNull();
   expect(screen.getByText("覆面駒・透明駒の検討")).not.toBeNull();
   expect(screen.getByRole("heading", { name: "覆面駒" })).not.toBeNull();
-  expect(screen.getByText("覆面駒版 β")).not.toBeNull();
+  expect(screen.queryByText("覆面駒版 β")).toBeNull();
   expect(screen.getByRole("heading", { name: "透明駒" })).not.toBeNull();
   expect(screen.getByText(/透明駒の検討機能は開発中です/)).not.toBeNull();
   expect(

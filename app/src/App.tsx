@@ -8,10 +8,7 @@ function App() {
   return (
     <div className="container">
       <h1>HiddenMate</h1>
-      <p>
-        覆面駒・透明駒の検討{" "}
-        <span className="badge bg-secondary">覆面駒版 β</span>
-      </p>
+      <p>覆面駒・透明駒の検討</p>
       <VariableSolver />
       <Card className="mb-4">
         <Card.Header as="h2" className="h5 mb-0">

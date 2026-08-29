@@ -1,6 +1,6 @@
 # HiddenMate
 
-覆面駒（Variable）入りのフェアリー協力詰を検討・創作するためのソフトウェアです。現在は**覆面駒版β**を公開しており、透明駒（Invisible）の検討機能は開発中です。
+覆面駒を使用した協力詰・協力自玉詰を検討するソフトウェアです。透明駒の検討機能は現在開発中です。
 
 Web版: **[HiddenMateを開く](https://springs022.github.io/hiddenmate/)**
 
@@ -16,9 +16,7 @@ Web版: **[HiddenMateを開く](https://springs022.github.io/hiddenmate/)**
 2. 入力済みのサンプルを変更せず「検討」を押します。
 3. 初形候補世界、覆面駒の候補駒種、解答が表示されます。
 
-通常駒は駒を選択してから盤または駒台をクリックして移動します。覆面駒は「覆面駒一覧」で選択して配置します。右クリック（スマートフォンではダブルタップ）で、通常駒の成・所属や覆面駒の所属を切り替えられます。
-
-## 覆面駒版βの実装状況
+## 現在の実装状況
 
 現在は、覆面駒を使用した協力詰・協力自玉詰の検討に対応しています。
 
@@ -28,18 +26,20 @@ Rust環境で次を実行します。
 
 ```console
 cd rust
-cargo run -p hiddenmate_cli -- ../examples/variable-rook-dragon.json
+cargo run -p hiddenmate_cli -- ../examples/variable-help-selfmate.json
 ```
 
 出力例：
 
 ```text
-初形候補世界: 14
+初形候補世界: 650
   V1: {Pawn, Lance, Knight, Silver, Gold, Bishop, Rook, King, ProPawn, ProLance, ProKnight, ProSilver, ProBishop, ProRook}
-解数: 3
-1: 82▲(64)
-2: 82▲成(64)
-3: 84▲(64)
+  V2: {Pawn, Lance, Knight, Silver, Gold, Bishop, Rook, King, ProPawn, ProLance, ProKnight, ProSilver, ProBishop, ProRook}
+  V3: {Pawn, Lance, Knight, Silver, Gold, Bishop, Rook, King, ProPawn, ProLance, ProKnight, ProSilver, ProBishop, ProRook}
+  V4: {Pawn, Lance, Knight, Silver, Gold, Bishop, Rook, King, ProPawn, ProLance, ProKnight, ProSilver, ProBishop, ProRook}
+解数: 2
+1: 15▲(26) 34玉(33) 16▲(15) 同△(56)
+2: 35▲(26) 34△(56) 24龍(35) 同△(34)
 ```
 
 問題形式は [design/problem-format.md](design/problem-format.md) を参照してください。
@@ -65,7 +65,7 @@ pnpm run serve
 
 ## フィードバック
 
-不具合、対応してほしいルール、使いにくい点は [GitHub Issues](https://github.com/springs022/hiddenmate/issues) へお寄せください。再現に使った問題JSONを添えていただけると調査しやすくなります。
+不具合等は [GitHub Issues](https://github.com/springs022/hiddenmate/issues) へお寄せください。再現に使った問題JSONを添えていただけると調査しやすくなります。
 
 ## ライセンスと由来
 

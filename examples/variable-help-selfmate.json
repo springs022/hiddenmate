@@ -1,0 +1,28 @@
+{
+  "baseSfen": "9/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1",
+  "plies": 4,
+  "rule": "helpSelfmate",
+  "handVariableMode": "indistinguishable",
+  "variables": [
+    {
+      "id": 1,
+      "color": "black",
+      "square": "14"
+    },
+    {
+      "id": 2,
+      "color": "black",
+      "square": "26"
+    },
+    {
+      "id": 3,
+      "color": "white",
+      "square": "33"
+    },
+    {
+      "id": 4,
+      "color": "white",
+      "square": "56"
+    }
+  ]
+}
