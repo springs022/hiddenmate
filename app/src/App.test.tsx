@@ -139,6 +139,36 @@ test("moves a selected standard piece by clicking the hand background", () => {
   ).toContain("銀1");
 });
 
+test("moves the defending king directly to the piece box", () => {
+  const { container } = render(<App />);
+  const kingSquare = screen.getByLabelText("93");
+  const pieceBox = container.querySelector(".variable-piece-box");
+
+  expect(kingSquare.textContent).toContain("玉");
+  expect(pieceBox).not.toBeNull();
+  fireEvent.click(kingSquare);
+  fireEvent.click(pieceBox!);
+
+  expect(kingSquare.textContent).not.toContain("玉");
+  expect(pieceBox?.textContent).toContain("玉1");
+});
+
+test("moves the defending king to the piece box via the defending hand", () => {
+  const { container } = render(<App />);
+  const kingSquare = screen.getByLabelText("93");
+  const defendingHand = container.querySelector(".variable-hand-white");
+  const pieceBox = container.querySelector(".variable-piece-box");
+
+  expect(kingSquare.textContent).toContain("玉");
+  expect(defendingHand).not.toBeNull();
+  fireEvent.click(kingSquare);
+  fireEvent.click(defendingHand!);
+
+  expect(kingSquare.textContent).not.toContain("玉");
+  expect(defendingHand?.textContent).not.toContain("玉");
+  expect(pieceBox?.textContent).toContain("玉1");
+});
+
 test("clears piece selections when clicking outside the board and hands", () => {
   const { container } = render(<App />);
   const silverSquare = screen.getByLabelText("83");

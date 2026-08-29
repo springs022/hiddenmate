@@ -693,7 +693,10 @@ function VariablePieceBox(props: {
       ? (props.selected.kind ?? "")
       : undefined;
   return (
-    <div className="variable-piece-box variable-hand mb-2">
+    <div
+      className="variable-piece-box variable-hand mb-2"
+      onClick={() => props.onClick(undefined)}
+    >
       <div className="small text-muted">駒箱</div>
       <Hands
         pieceBox
