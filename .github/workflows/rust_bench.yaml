@@ -206,7 +206,6 @@ jobs:
           alert-threshold: "105%"
           comment-on-alert: true
           fail-on-alert: true
-          alert-comment-cc-users: "@ogiekako"
 
       - name: Store cargo benchmark result
         uses: benchmark-action/github-action-benchmark@v1
@@ -221,4 +220,3 @@ jobs:
           alert-threshold: "200%"
           comment-on-alert: true
           fail-on-alert: true
-          alert-comment-cc-users: "@ogiekako"
