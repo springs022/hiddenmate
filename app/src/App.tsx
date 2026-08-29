@@ -9,7 +9,7 @@ function App() {
     <div className="container">
       <h1>HiddenMate</h1>
       <p>
-        覆面駒・透明駒協力詰ソルバー{" "}
+        覆面駒・透明駒の検討{" "}
         <span className="badge bg-secondary">覆面駒版 β</span>
       </p>
       <VariableSolver />
