@@ -53,8 +53,9 @@ code {
   }
 
   .variable-three-column-layout > .variable-layout-results {
-    flex: 0 0 39%;
-    max-width: 39%;
+    flex: 0 0 37%;
+    max-width: 37%;
+    margin-left: 2%;
   }
 }
 
