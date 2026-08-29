@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787999098578,
+  "lastUpdate": 1787999101349,
   "repoUrl": "https://github.com/springs022/hiddenmate",
   "entries": {
     "Instruction Count (iai-callgrind)": [
@@ -10917,6 +10917,148 @@ window.BENCHMARK_DATA = {
             "name": "bench_backward_search",
             "value": 30867,
             "range": "± 16",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "springs022",
+            "username": "springs022",
+            "email": "hit.and.miss.masayume@gmail.com"
+          },
+          "committer": {
+            "name": "springs022",
+            "username": "springs022",
+            "email": "hit.and.miss.masayume@gmail.com"
+          },
+          "id": "1287e623be5bbce46f49a6ebd7c078a98fa750bc",
+          "message": "公開ページのメタ情報を更新",
+          "timestamp": "2026-08-29T10:21:42Z",
+          "url": "https://github.com/springs022/hiddenmate/commit/1287e623be5bbce46f49a6ebd7c078a98fa750bc"
+        },
+        "date": 1787999100594,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "black_advance",
+            "value": 398,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "white_advance",
+            "value": 2666,
+            "range": "± 7",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "black_pinned",
+            "value": 193,
+            "range": "± 12",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve3",
+            "value": 405,
+            "range": "± 600",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "oneway",
+            "value": 25772,
+            "range": "± 60",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "reachable",
+            "value": 1656,
+            "range": "± 8",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "pinned300",
+            "value": 4612,
+            "range": "± 9",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bench_solve97",
+            "value": 1281247,
+            "range": "± 250",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "attacker",
+            "value": 11646,
+            "range": "± 107",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "canonicalize_attacker_goldish",
+            "value": 184,
+            "range": "± 4",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "canonicalize_attacker_goldish_heavy",
+            "value": 96,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "canonicalize_attacker_goldish_empty",
+            "value": 39,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "canonical_digest_for_smoke",
+            "value": 145,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "canonical_digest_for_smoke_heavy",
+            "value": 37,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "canonical_digest_for_smoke_empty",
+            "value": 16,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "near_mate",
+            "value": 19277574,
+            "range": "± 115094",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bench_jugemu",
+            "value": 26666,
+            "range": "± 4",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bench_1965",
+            "value": 3175,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bench_1461",
+            "value": 16273,
+            "range": "± 5",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bench_backward_search",
+            "value": 30817,
+            "range": "± 15",
             "unit": "ns/iter"
           }
         ]
