@@ -7,7 +7,17 @@ declare const FMRS_BASE_PATH: string;
 function App() {
   return (
     <div className="container">
-      <h1>HiddenMate</h1>
+      <div className="d-flex justify-content-between align-items-baseline">
+        <h1>HiddenMate</h1>
+        <a
+          className="text-nowrap"
+          href="https://tsume-springs.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          フェアリーの風音
+        </a>
+      </div>
       <p>覆面駒・透明駒の検討</p>
       <VariableSolver />
       <Card className="mb-4">

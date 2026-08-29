@@ -53,6 +53,10 @@ function placeSilverAt83() {
 test("renders HiddenMate title", () => {
   render(<App />);
   expect(screen.getByRole("heading", { name: "HiddenMate" })).not.toBeNull();
+  const homepageLink = screen.getByRole("link", { name: "フェアリーの風音" });
+  expect(homepageLink.getAttribute("href")).toBe("https://tsume-springs.com/");
+  expect(homepageLink.getAttribute("target")).toBe("_blank");
+  expect(homepageLink.getAttribute("rel")).toBe("noopener noreferrer");
   expect(screen.getByText("覆面駒・透明駒の検討")).not.toBeNull();
   expect(screen.getByRole("heading", { name: "覆面駒" })).not.toBeNull();
   expect(screen.queryByText("覆面駒版 β")).toBeNull();
