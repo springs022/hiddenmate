@@ -69,18 +69,37 @@ interface SavedVariableProblem {
 }
 
 interface SavedVariableProblemStore {
-  version: 2;
+  version: 3;
   positions: SavedVariableProblem[];
 }
 
-const initialBaseSfen = "9/9/kS7/N8/1L7/9/9/9/8K b 2r2b4g3s3n3l18p 1";
+const initialBaseSfen = "9/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1";
+const initialPlies = 4;
+const initialRule: MateRule = "helpSelfmate";
+const initialHandVariableMode: HandVariableMode = "indistinguishable";
 const singleKingBaseSfen = "4k4/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1";
 const doubleKingBaseSfen = "4k4/9/9/9/9/9/9/9/4K4 b 2r2b4g4s4n4l18p 1";
+const allPiecesInBoxBaseSfen = "9/9/9/9/9/9/9/9/9 b - 1";
 const initialVariables: VariableDraft[] = [
   {
     id: 1,
     color: "black",
-    location: { type: "board", square: "64" },
+    location: { type: "board", square: "14" },
+  },
+  {
+    id: 2,
+    color: "black",
+    location: { type: "board", square: "26" },
+  },
+  {
+    id: 3,
+    color: "white",
+    location: { type: "board", square: "33" },
+  },
+  {
+    id: 4,
+    color: "white",
+    location: { type: "board", square: "56" },
   },
 ];
 const savedPositionsKey = "hiddenmate_variable_saved_positions";
@@ -96,6 +115,20 @@ function defaultSavedVariableProblems(): SavedVariableProblem[] {
     {
       name: "双玉のみ",
       problem: buildProblemDocument(doubleKingBaseSfen, 1, []),
+    },
+    {
+      name: "すべて駒箱",
+      problem: buildProblemDocument(allPiecesInBoxBaseSfen, 1, []),
+    },
+    {
+      name: "サンプル",
+      problem: buildProblemDocument(
+        initialBaseSfen,
+        initialPlies,
+        initialVariables,
+        initialRule,
+        initialHandVariableMode,
+      ),
     },
   ];
 }
@@ -154,7 +187,7 @@ function loadSavedVariableProblems(): SavedVariableProblem[] {
     if (
       parsed &&
       typeof parsed === "object" &&
-      (parsed as Record<string, unknown>).version === 2
+      (parsed as Record<string, unknown>).version === 3
     ) {
       return validSavedVariableProblems(
         (parsed as Record<string, unknown>).positions,
@@ -164,7 +197,8 @@ function loadSavedVariableProblems(): SavedVariableProblem[] {
     if (
       parsed &&
       typeof parsed === "object" &&
-      (parsed as Record<string, unknown>).version === 1
+      ((parsed as Record<string, unknown>).version === 1 ||
+        (parsed as Record<string, unknown>).version === 2)
     ) {
       const legacy = validSavedVariableProblems(
         (parsed as Record<string, unknown>).positions,
@@ -178,7 +212,7 @@ function loadSavedVariableProblems(): SavedVariableProblem[] {
       ].slice(0, maxSavedPositions);
     }
 
-    // 旧形式（配列）から移行する際だけ、デフォルト2局面を補う。
+    // 旧形式（配列）から移行する際は、組み込み局面を補う。
     const legacy = validSavedVariableProblems(parsed);
     const legacyNames = new Set(legacy.map((position) => position.name));
     return [
@@ -209,9 +243,9 @@ function validSavedVariableProblems(value: unknown): SavedVariableProblem[] {
 
 const initialProblem = buildProblemJson(
   initialBaseSfen,
-  1,
-  "helpmate",
-  "indistinguishable",
+  initialPlies,
+  initialRule,
+  initialHandVariableMode,
   initialVariables,
 );
 
@@ -223,10 +257,10 @@ export function VariableSolver() {
   });
   const [inputMode, setInputMode] = useState<InputMode>("form");
   const [sfenInput, setSfenInput] = useState(initialBaseSfen);
-  const [plies, setPlies] = useState(1);
-  const [rule, setRule] = useState<MateRule>("helpmate");
+  const [plies, setPlies] = useState(initialPlies);
+  const [rule, setRule] = useState<MateRule>(initialRule);
   const [handVariableMode, setHandVariableMode] =
-    useState<HandVariableMode>("indistinguishable");
+    useState<HandVariableMode>(initialHandVariableMode);
   const [variables, setVariables] = useState<VariableDraft[]>(initialVariables);
   const [selectedId, setSelectedId] = useState<number>(0);
   const [manualProblem, setManualProblem] = useState(initialProblem);
@@ -259,7 +293,7 @@ export function VariableSolver() {
   useEffect(() => {
     try {
       const store: SavedVariableProblemStore = {
-        version: 2,
+        version: 3,
         positions: savedPositions,
       };
       localStorage.setItem(savedPositionsKey, JSON.stringify(store));

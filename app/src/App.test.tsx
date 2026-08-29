@@ -44,6 +44,12 @@ beforeEach(() => {
   });
 });
 
+function placeSilverAt83() {
+  fireEvent.click(screen.getByText("銀"));
+  fireEvent.click(screen.getByLabelText("83"));
+  return screen.getByLabelText("83");
+}
+
 test("renders HiddenMate title", () => {
   render(<App />);
   expect(screen.getByRole("heading", { name: "HiddenMate" })).not.toBeNull();
@@ -63,6 +69,8 @@ test("renders HiddenMate title", () => {
   expect(screen.queryByText("攻方駒台")).toBeNull();
   expect(screen.getByRole("button", { name: "単玉のみ" })).not.toBeNull();
   expect(screen.getByRole("button", { name: "双玉のみ" })).not.toBeNull();
+  expect(screen.getByRole("button", { name: "すべて駒箱" })).not.toBeNull();
+  expect(screen.getByRole("button", { name: "サンプル" })).not.toBeNull();
   expect(screen.queryByText("盤面をリセット")).toBeNull();
   expect(
     screen.getByRole("heading", { name: "覆面駒の新規追加" }),
@@ -110,22 +118,45 @@ test("places the editor, variable controls, and solve results in three columns",
   ).toBe(true);
 });
 
-test("starts with ordinary remaining pieces in the white hand", () => {
+test("starts with the help-selfmate sample", () => {
   const { container } = render(<App />);
   const pieceBox = container.querySelector(".variable-piece-box");
   const whiteHand = container.querySelector(".variable-hand-white");
 
-  expect(pieceBox?.textContent).toContain("なし");
+  expect(pieceBox?.textContent).toContain("玉2");
   expect(whiteHand?.textContent).toContain("飛2");
   expect(whiteHand?.textContent).toContain("歩18");
   expect(
     (screen.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
-  ).toContain("2r2b4g3s3n3l18p");
+  ).toBe("9/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1");
+  expect((screen.getByLabelText("手数") as HTMLInputElement).value).toBe("4");
+  expect(
+    (screen.getByLabelText("協力自玉詰") as HTMLInputElement).checked,
+  ).toBe(true);
+  expect(screen.getByLabelText("14 V1")).not.toBeNull();
+  expect(screen.getByLabelText("26 V2")).not.toBeNull();
+  expect(screen.getByLabelText("33 V3")).not.toBeNull();
+  expect(screen.getByLabelText("56 V4")).not.toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "JSON詳細編集" }));
+  expect(
+    JSON.parse((screen.getByLabelText("問題JSON") as HTMLTextAreaElement).value),
+  ).toEqual({
+    baseSfen: "9/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1",
+    plies: 4,
+    rule: "helpSelfmate",
+    handVariableMode: "indistinguishable",
+    variables: [
+      { id: 1, color: "black", square: "14" },
+      { id: 2, color: "black", square: "26" },
+      { id: 3, color: "white", square: "33" },
+      { id: 4, color: "white", square: "56" },
+    ],
+  });
 });
 
 test("moves a selected standard piece by clicking the hand background", () => {
   const { container } = render(<App />);
-  const silverSquare = screen.getByLabelText("83");
+  const silverSquare = placeSilverAt83();
   const attackHand = container.querySelector(".variable-hand-black");
 
   expect(silverSquare.textContent).toContain("銀");
@@ -141,7 +172,8 @@ test("moves a selected standard piece by clicking the hand background", () => {
 
 test("moves the defending king directly to the piece box", () => {
   const { container } = render(<App />);
-  const kingSquare = screen.getByLabelText("93");
+  fireEvent.click(screen.getByRole("button", { name: "双玉のみ" }));
+  const kingSquare = screen.getByLabelText("51");
   const pieceBox = container.querySelector(".variable-piece-box");
 
   expect(kingSquare.textContent).toContain("玉");
@@ -155,7 +187,8 @@ test("moves the defending king directly to the piece box", () => {
 
 test("moves the defending king to the piece box via the defending hand", () => {
   const { container } = render(<App />);
-  const kingSquare = screen.getByLabelText("93");
+  fireEvent.click(screen.getByRole("button", { name: "双玉のみ" }));
+  const kingSquare = screen.getByLabelText("51");
   const defendingHand = container.querySelector(".variable-hand-white");
   const pieceBox = container.querySelector(".variable-piece-box");
 
@@ -171,8 +204,8 @@ test("moves the defending king to the piece box via the defending hand", () => {
 
 test("clears piece selections when clicking outside the board and hands", () => {
   const { container } = render(<App />);
-  const silverSquare = screen.getByLabelText("83");
-  const variableButton = screen.getByRole("button", { name: /▲V1 64/ });
+  const silverSquare = placeSilverAt83();
+  const variableButton = screen.getByRole("button", { name: /▲V1 14/ });
   const outside = screen.getByRole("heading", { name: "覆面駒" });
 
   fireEvent.click(silverSquare);
@@ -192,16 +225,17 @@ test("clears piece selections when clicking outside the board and hands", () => 
 
 test("shifts standard and variable pieces together", () => {
   render(<App />);
+  placeSilverAt83();
 
   expect(screen.getByLabelText("83").textContent).toContain("銀");
-  expect(screen.getByLabelText("64 V1").textContent).toContain("V1");
+  expect(screen.getByLabelText("14 V1").textContent).toContain("V1");
 
   fireEvent.click(screen.getByTitle("right shift"));
 
   expect(screen.getByLabelText("73").textContent).toContain("銀");
-  expect(screen.getByLabelText("54 V1").textContent).toContain("V1");
+  expect(screen.getByLabelText("94 V1").textContent).toContain("V1");
   expect(screen.getByLabelText("83").textContent).not.toContain("銀");
-  expect(screen.getByLabelText("64").textContent).not.toContain("V1");
+  expect(screen.getByLabelText("14").textContent).not.toContain("V1");
 });
 
 test("saves the current variable position with a name", () => {
@@ -228,11 +262,57 @@ test("loads the default single-king position from saved positions", () => {
   expect(container.querySelector(".variable-piece")).toBeNull();
 });
 
+test("loads the all-pieces-in-box position from saved positions", () => {
+  const { container } = render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "すべて駒箱" }));
+
+  expect(
+    (screen.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
+  ).toBe("9/9/9/9/9/9/9/9/9 b - 1");
+  expect(container.querySelector(".variable-piece")).toBeNull();
+  expect(container.querySelector(".variable-piece-box")?.textContent).toContain(
+    "玉2",
+  );
+  expect(container.querySelector(".variable-piece-box")?.textContent).toContain(
+    "飛2",
+  );
+  expect(container.querySelector(".variable-piece-box")?.textContent).toContain(
+    "歩18",
+  );
+});
+
+test("loads the sample below the all-pieces-in-box position", () => {
+  render(<App />);
+  const allPiecesInBox = screen.getByRole("button", { name: "すべて駒箱" });
+  const sample = screen.getByRole("button", { name: "サンプル" });
+
+  expect(
+    Boolean(
+      allPiecesInBox.compareDocumentPosition(sample) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ),
+  ).toBe(true);
+  fireEvent.click(allPiecesInBox);
+  fireEvent.click(sample);
+
+  expect(
+    (screen.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
+  ).toBe("9/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1");
+  expect((screen.getByLabelText("手数") as HTMLInputElement).value).toBe("4");
+  expect(
+    (screen.getByLabelText("協力自玉詰") as HTMLInputElement).checked,
+  ).toBe(true);
+  expect(screen.getByLabelText("14 V1")).not.toBeNull();
+  expect(screen.getByLabelText("26 V2")).not.toBeNull();
+  expect(screen.getByLabelText("33 V3")).not.toBeNull();
+  expect(screen.getByLabelText("56 V4")).not.toBeNull();
+});
+
 test("migrates saved positions while refreshing built-in defaults", () => {
   localStorage.setItem(
     "hiddenmate_variable_saved_positions",
     JSON.stringify({
-      version: 1,
+      version: 2,
       positions: [
         {
           name: "単玉のみ",
@@ -261,8 +341,10 @@ test("migrates saved positions while refreshing built-in defaults", () => {
     (screen.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
   ).toBe("4k4/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1");
   expect(screen.getByRole("button", { name: "ユーザー局面" })).not.toBeNull();
+  expect(screen.getByRole("button", { name: "すべて駒箱" })).not.toBeNull();
+  expect(screen.getByRole("button", { name: "サンプル" })).not.toBeNull();
   expect(localStorage.getItem("hiddenmate_variable_saved_positions")).toContain(
-    '"version":2',
+    '"version":3',
   );
 });
 
@@ -274,11 +356,11 @@ test("keeps a newly added variable unselected", () => {
   expect(container.querySelectorAll(".variable-piece-selected")).toHaveLength(
     0,
   );
-  expect(screen.getByRole("button", { name: /▲V2/ }).className).toContain(
+  expect(screen.getByRole("button", { name: /▲V5/ }).className).toContain(
     "btn-outline-primary",
   );
 
-  fireEvent.click(screen.getByText("▲V2"));
+  fireEvent.click(screen.getByText("▲V5"));
   expect(
     container.querySelectorAll(".variable-hand-piece-selected"),
   ).toHaveLength(1);
@@ -293,7 +375,7 @@ test("allows at most six variables and does not highlight a hand", () => {
     name: "受方持駒に追加",
   });
 
-  for (let i = 0; i < 5; i += 1) {
+  for (let i = 0; i < 2; i += 1) {
     fireEvent.click(addBlack);
   }
 
@@ -302,13 +384,13 @@ test("allows at most six variables and does not highlight a hand", () => {
   expect(screen.getByText("▲V6")).not.toBeNull();
   expect(screen.queryByText("▲V7")).toBeNull();
 
-  fireEvent.click(screen.getByLabelText("64 V1"));
+  fireEvent.click(screen.getByLabelText("14 V1"));
   expect(container.querySelector(".variable-hand-drop-target")).toBeNull();
 });
 
 test("toggles a board variable and clears selection after moving it", () => {
   const { container } = render(<App />);
-  const variableSquare = screen.getByLabelText("64 V1");
+  const variableSquare = screen.getByLabelText("14 V1");
 
   fireEvent.click(variableSquare);
   expect(container.querySelectorAll(".variable-piece-selected")).toHaveLength(
@@ -331,18 +413,18 @@ test("rotates a white board variable like a standard white piece", () => {
   render(<App />);
 
   fireEvent.click(screen.getByRole("button", { name: "受方持駒に追加" }));
-  fireEvent.click(screen.getByText("△V2"));
+  fireEvent.click(screen.getByText("△V5"));
   fireEvent.click(screen.getByLabelText("55"));
 
   expect(
-    (screen.getByLabelText("55 V2").firstElementChild as HTMLElement).style
+    (screen.getByLabelText("55 V5").firstElementChild as HTMLElement).style
       .transform,
   ).toBe("rotate(180deg)");
 });
 
 test("reverses a board variable owner by right click or double tap", () => {
   render(<App />);
-  const variableSquare = screen.getByLabelText("64 V1");
+  const variableSquare = screen.getByLabelText("14 V1");
 
   fireEvent.contextMenu(variableSquare);
   expect(variableSquare.textContent).toContain("△V1");
@@ -365,7 +447,7 @@ test("does not show nothing when an otherwise empty hand has a variable", () => 
   expect(attackHand?.textContent).toContain("なし");
   fireEvent.click(screen.getByRole("button", { name: "攻方持駒に追加" }));
 
-  expect(attackHand?.textContent).toContain("▲V2");
+  expect(attackHand?.textContent).toContain("▲V5");
   expect(attackHand?.textContent).not.toContain("なし");
 });
 
@@ -414,20 +496,20 @@ test("allows clearing the plies field before entering a new value", () => {
   expect(plies.value).toBe("3");
 });
 
-test("selects help-selfmate and includes the rule in problem JSON", () => {
+test("starts with help-selfmate and can include helpmate in problem JSON", () => {
   render(<App />);
 
   const helpmate = screen.getByLabelText("協力詰") as HTMLInputElement;
   const helpSelfmate = screen.getByLabelText("協力自玉詰") as HTMLInputElement;
-  expect(helpmate.checked).toBe(true);
-
-  fireEvent.click(helpSelfmate);
   expect(helpSelfmate.checked).toBe(true);
+
+  fireEvent.click(helpmate);
+  expect(helpmate.checked).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "JSON詳細編集" }));
 
   expect(
     (screen.getByLabelText("問題JSON") as HTMLTextAreaElement).value,
-  ).toContain('"rule": "helpSelfmate"');
+  ).toContain('"rule": "helpmate"');
 });
 
 test("defaults to indistinguishable hand variables and can select distinguishable", () => {
@@ -450,7 +532,7 @@ test("defaults to indistinguishable hand variables and can select distinguishabl
 
 test("treats a board double tap like a right click", () => {
   render(<App />);
-  const silverSquare = screen.getByLabelText("83");
+  const silverSquare = placeSilverAt83();
 
   fireEvent.touchEnd(silverSquare);
   fireEvent.touchEnd(silverSquare);
