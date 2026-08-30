@@ -48,6 +48,11 @@ export function check_one_way_mate(sfen: string): OneWayMateResult | undefined;
 export function is_white_in_check(sfen: string): boolean;
 
 /**
+ * 駒種を指定した透明駒問題JSONを解き、Web UI向けのJSONを返す。
+ */
+export function solve_known_invisible_problem(json: string, max_solutions: number): string;
+
+/**
  * 覆面駒問題JSONを解き、Web UI向けのJSONを返す。
  */
 export function solve_variable_problem(json: string, max_solutions: number): string;
