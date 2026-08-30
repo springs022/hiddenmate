@@ -189,7 +189,7 @@ export function KnownInvisibleSolver() {
       <p>{formatInvisibleSummary(solvedProblem)}</p>
       <p>初形候補世界: <strong>{response.worldCount}</strong> ／ 解数: <strong>{response.solutions.length}</strong></p>
       {response.solutions.length === 0 ? <Alert variant="info">指定手数以下の解はありません。</Alert> :
-        <ol className="known-invisible-solutions">{response.solutions.map((solution, index) => <li key={index}><code>{solution.join(" ")}</code></li>)}</ol>}</>}
+        <ol className="known-invisible-solutions">{response.solutions.map((solution, index) => <li key={index}><code>{solution.join(" ")} まで {solution.length}手</code></li>)}</ol>}</>}
   </>;
 
   return <Card className="mb-4 known-invisible-solver">

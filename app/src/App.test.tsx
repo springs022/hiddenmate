@@ -175,7 +175,10 @@ test("shows known invisible rule, plies, and piece summary above counts", async 
         requestId: 1,
         responseJson: JSON.stringify({
           worldCount: 71,
-          solutions: Array.from({ length: 6 }, () => ["X"]),
+          solutions: [
+            ["13玉", "23歩", "同X", "11玉", "22香成"],
+            ...Array.from({ length: 5 }, () => ["X"]),
+          ],
         }),
       },
     } as MessageEvent);
@@ -194,6 +197,9 @@ test("shows known invisible rule, plies, and piece summary above counts", async 
   ).not.toBe(0);
   expect(countsSummary.textContent).toContain("71");
   expect(countsSummary.textContent).toContain("6");
+  expect(
+    panel.getByText("13玉 23歩 同X 11玉 22香成 まで 5手"),
+  ).not.toBeNull();
 });
 
 test("places the editor, variable controls, and solve results in three columns", () => {
