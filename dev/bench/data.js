@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788012195350,
+  "lastUpdate": 1788049183931,
   "repoUrl": "https://github.com/springs022/hiddenmate",
   "entries": {
     "Instruction Count (iai-callgrind)": [
@@ -3089,6 +3089,58 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/springs022/hiddenmate/commit/8f6ccc959cb4e6915b0f2bd29c3200fd85dd1e15"
         },
         "date": 1788012190370,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "bench_black_advance",
+            "value": 50875,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_white_advance",
+            "value": 124145,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_reachable",
+            "value": 18369,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_attacker",
+            "value": 122124,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_canonicalize",
+            "value": 2258,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_near_mate",
+            "value": 435325904,
+            "unit": "Instructions"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "springs022",
+            "username": "springs022",
+            "email": "hit.and.miss.masayume@gmail.com"
+          },
+          "committer": {
+            "name": "springs022",
+            "username": "springs022",
+            "email": "hit.and.miss.masayume@gmail.com"
+          },
+          "id": "9401c0e917892d7020c8132232e731ee2aaa44ea",
+          "message": "透明駒（駒種指定）の検討機能を追加",
+          "timestamp": "2026-08-29T23:58:58Z",
+          "url": "https://github.com/springs022/hiddenmate/commit/9401c0e917892d7020c8132232e731ee2aaa44ea"
+        },
+        "date": 1788049182162,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
