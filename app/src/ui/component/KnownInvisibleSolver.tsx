@@ -76,6 +76,8 @@ export function KnownInvisibleSolver() {
   });
   const [sfenInput, setSfenInput] = useState(initialSfen);
   const [counts, setCounts] = useState<Counts>(emptyCounts);
+  const [draftColor, setDraftColor] = useState<Color>("black");
+  const [draftKind, setDraftKind] = useState<InvisibleKind>("P");
   const [plies, setPlies] = useState(3);
   const [rule, setRule] = useState<MateRule>("helpmate");
   const [maxSolutions, setMaxSolutions] = useState(100);
@@ -91,6 +93,11 @@ export function KnownInvisibleSolver() {
 
   const total = Object.values(counts).reduce(
     (sum, side) => sum + Object.values(side).reduce((a, b) => a + b, 0), 0,
+  );
+  const invisibleEntries = (["black", "white"] as Color[]).flatMap((color) =>
+    kinds
+      .filter(([kind]) => counts[color][kind] > 0)
+      .map(([kind, label]) => ({ color, kind, label, count: counts[color][kind] })),
   );
   const problemJson = buildProblemJson(encodeSfen(editorState.position), plies, rule, counts);
   const clear = () => { setError(undefined); setResponse(undefined); setSolvedProblem(undefined); };
@@ -224,13 +231,34 @@ export function KnownInvisibleSolver() {
             <Button size="sm" variant="outline-secondary" onClick={() => loadPreset(initialSfen)}>双玉のみ</Button>
             <Button size="sm" variant="outline-secondary" onClick={() => loadPreset("9/9/9/9/9/9/9/9/9 b - 1")}>すべて駒箱</Button>
           </div>
-          {(["white", "black"] as Color[]).map((color) => <div className="border rounded p-2 mb-2" key={color}>
-            <div className="fw-bold mb-2">{color === "white" ? "受方" : "攻方"}</div>
-            <div className="known-invisible-counts">{kinds.map(([kind, label]) => <div className="known-invisible-counter" key={kind}>
-              <span>{label}</span><Button size="sm" variant="outline-secondary" aria-label={`${color === "white" ? "受方" : "攻方"}${label}を減らす`} disabled={counts[color][kind] === 0 || solving} onClick={() => changeCount(color, kind, -1)}>−</Button>
-              <output>{counts[color][kind]}</output><Button size="sm" variant="outline-secondary" aria-label={`${color === "white" ? "受方" : "攻方"}${label}を増やす`} disabled={total >= 2 || solving} onClick={() => changeCount(color, kind, 1)}>＋</Button>
-            </div>)}</div>
-          </div>)}
+          <div className="known-invisible-control-panel border rounded p-2">
+            <div className="d-flex flex-wrap align-items-end gap-2">
+              <Form.Group className="known-invisible-owner" controlId="known-invisible-owner">
+                <Form.Label>所属</Form.Label>
+                <Form.Select size="sm" value={draftColor} disabled={solving} onChange={(event) => setDraftColor(event.target.value as Color)}>
+                  <option value="black">攻方</option>
+                  <option value="white">受方</option>
+                </Form.Select>
+              </Form.Group>
+              <Form.Group className="known-invisible-kind" controlId="known-invisible-kind">
+                <Form.Label>駒種</Form.Label>
+                <Form.Select size="sm" value={draftKind} disabled={solving} onChange={(event) => setDraftKind(event.target.value as InvisibleKind)}>
+                  {kinds.map(([kind, label]) => <option value={kind} key={kind}>{label}</option>)}
+                </Form.Select>
+              </Form.Group>
+              <Button size="sm" className="text-nowrap" aria-label="透明駒を追加" disabled={total >= 2 || solving} onClick={() => changeCount(draftColor, draftKind, 1)}>追加</Button>
+            </div>
+            <div className="mt-2">
+              <div className="small text-muted mb-1">追加済み（{total}/2枚）</div>
+              {invisibleEntries.length === 0 ? <div className="small text-muted">なし</div> :
+                <div className="known-invisible-added-list">{invisibleEntries.map(({ color, kind, label, count }) =>
+                  <span className="known-invisible-added-item" key={`${color}-${kind}`}>
+                    <span>{color === "black" ? "攻方" : "受方"} {label} ×{count}</span>
+                    <button type="button" className="btn-close" aria-label={`${color === "black" ? "攻方" : "受方"}${label}を1枚削除`} disabled={solving} onClick={() => changeCount(color, kind, -1)} />
+                  </span>,
+                )}</div>}
+            </div>
+          </div>
         </Col>
         <Col xl={4} className="variable-layout-results">{solveControls}{results}</Col>
       </Row> : <div>

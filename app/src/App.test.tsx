@@ -127,13 +127,20 @@ test("configures at most two known-kind invisible pieces", () => {
     (panel.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
   ).toBe("4k4/9/9/9/9/9/9/9/4K4 b 2r2b4g4s4n4l18p 1");
   expect(solver.querySelector(".variable-piece-box")?.textContent).toContain("なし");
-  const whiteKing = panel.getByRole("button", { name: "受方玉を増やす" });
-  const blackRook = panel.getByRole("button", { name: "攻方飛を増やす" });
-  fireEvent.click(whiteKing);
-  fireEvent.click(blackRook);
+  const owner = panel.getByLabelText("所属");
+  const kind = panel.getByLabelText("駒種");
+  const add = panel.getByRole("button", { name: "透明駒を追加" });
+  fireEvent.change(owner, { target: { value: "white" } });
+  fireEvent.change(kind, { target: { value: "K" } });
+  fireEvent.click(add);
+  fireEvent.change(owner, { target: { value: "black" } });
+  fireEvent.change(kind, { target: { value: "R" } });
+  fireEvent.click(add);
 
-  expect((whiteKing as HTMLButtonElement).disabled).toBe(true);
-  expect((blackRook as HTMLButtonElement).disabled).toBe(true);
+  expect((add as HTMLButtonElement).disabled).toBe(true);
+  expect(panel.getByText("受方 玉 ×1")).not.toBeNull();
+  expect(panel.getByText("攻方 飛 ×1")).not.toBeNull();
+  expect(panel.getByRole("button", { name: "受方玉を1枚削除" })).not.toBeNull();
   fireEvent.click(panel.getByRole("button", { name: "JSON詳細編集" }));
   const problemJson = panel.getByLabelText("問題JSON") as HTMLTextAreaElement;
   expect(problemJson.value).toContain('"kind": "K"');

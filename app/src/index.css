@@ -297,26 +297,39 @@ code {
   background: #f8f9fa;
 }
 
-.known-invisible-counts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+.known-invisible-control-panel {
+  background: #f8f9fa;
+}
+
+.known-invisible-owner {
+  flex: 0 0 6rem;
+}
+
+.known-invisible-kind {
+  flex: 0 0 6rem;
+}
+
+.known-invisible-added-list {
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.35rem;
 }
 
-.known-invisible-counter {
-  display: grid;
-  grid-template-columns: 1.8rem 1.8rem 1.5rem 1.8rem;
+.known-invisible-added-item {
+  display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
+  gap: 0.4rem;
+  padding: 0.2rem 0.4rem 0.2rem 0.55rem;
+  border: 1px solid #ced4da;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 0.875rem;
 }
 
-.known-invisible-counter .btn {
-  padding: 0.1rem;
-}
-
-.known-invisible-counter output {
-  text-align: center;
-  font-variant-numeric: tabular-nums;
+.known-invisible-added-item .btn-close {
+  width: 0.45rem;
+  height: 0.45rem;
+  padding: 0.25rem;
 }
 
 .known-invisible-solver pre {
