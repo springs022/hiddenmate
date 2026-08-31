@@ -80,7 +80,7 @@ export function KnownInvisibleSolver() {
   const [draftKind, setDraftKind] = useState<InvisibleKind>("P");
   const [plies, setPlies] = useState(3);
   const [rule, setRule] = useState<MateRule>("helpmate");
-  const [maxSolutions, setMaxSolutions] = useState(100);
+  const [maxSolutions, setMaxSolutions] = useState(20);
   const [manualProblem, setManualProblem] = useState(buildProblemJson(initialSfen, 3, "helpmate", emptyCounts()));
   const [solving, setSolving] = useState(false);
   const [response, setResponse] = useState<SolveResponse>();

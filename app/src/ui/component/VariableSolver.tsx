@@ -53,6 +53,7 @@ interface VariableSolveResponse {
   worldCount: number;
   candidates: VariableCandidates[];
   solutions: string[][];
+  solutionCandidates?: VariableCandidates[][][];
 }
 
 interface VariableSolveResult {
@@ -264,7 +265,7 @@ export function VariableSolver() {
   const [variables, setVariables] = useState<VariableDraft[]>(initialVariables);
   const [selectedId, setSelectedId] = useState<number>(0);
   const [manualProblem, setManualProblem] = useState(initialProblem);
-  const [maxSolutions, setMaxSolutions] = useState(100);
+  const [maxSolutions, setMaxSolutions] = useState(20);
   const [result, setResult] = useState<VariableSolveResult>();
   const [error, setError] = useState<string>();
   const [solving, setSolving] = useState(false);
@@ -1279,6 +1280,19 @@ export function VariableSolveControls(props: {
 
 function VariableResult(props: VariableSolveResult) {
   const copyText = formatResultForCopy(props.response);
+  const [selectedMove, setSelectedMove] = useState<{
+    solutionIndex: number;
+    moveIndex: number;
+  }>();
+  useEffect(() => setSelectedMove(undefined), [props.response]);
+  const displayedCandidates = selectedMove
+    ? props.response.solutionCandidates?.[selectedMove.solutionIndex]?.[
+        selectedMove.moveIndex
+      ] ?? props.response.candidates
+    : props.response.candidates;
+  const candidateHeading = selectedMove
+    ? `駒種候補（解${selectedMove.solutionIndex + 1}：${selectedMove.moveIndex + 1}手目指了図）`
+    : "駒種候補（初形）";
   return (
     <div aria-live="polite">
       <p className="mb-0">
@@ -1294,11 +1308,11 @@ function VariableResult(props: VariableSolveResult) {
         <thead>
           <tr>
             <th>覆面駒</th>
-            <th>初形での駒種候補</th>
+            <th>{candidateHeading}</th>
           </tr>
         </thead>
         <tbody>
-          {props.response.candidates.map((candidate) => (
+          {displayedCandidates.map((candidate) => (
             <tr key={candidate.id}>
               <td>V{candidate.id}</td>
               <td>
@@ -1309,6 +1323,16 @@ function VariableResult(props: VariableSolveResult) {
           ))}
         </tbody>
       </Table>
+      {selectedMove && (
+        <Button
+          className="mb-2 p-0"
+          size="sm"
+          variant="link"
+          onClick={() => setSelectedMove(undefined)}
+        >
+          駒種候補（初形）に戻す
+        </Button>
+      )}
       <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
         <h3 className="h6 mb-0">解答</h3>
         <CopyButton text={copyText} idleLabel="解答をコピー" />
@@ -1322,7 +1346,23 @@ function VariableResult(props: VariableSolveResult) {
               <code>
                 {solution.map((move, moveIndex) => (
                   <Fragment key={`${moveIndex}-${move}`}>
-                    {move}
+                    <button
+                      type="button"
+                      className="variable-solution-move"
+                      aria-label={`解${index + 1}の${moveIndex + 1}手目 ${move}`}
+                      aria-pressed={
+                        selectedMove?.solutionIndex === index &&
+                        selectedMove.moveIndex === moveIndex
+                      }
+                      onClick={() =>
+                        setSelectedMove({
+                          solutionIndex: index,
+                          moveIndex,
+                        })
+                      }
+                    >
+                      {move}
+                    </button>
                     {moveIndex < solution.length - 1 && (
                       <>
                         {" "}

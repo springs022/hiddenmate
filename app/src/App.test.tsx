@@ -98,6 +98,7 @@ test("renders HiddenMate title", () => {
 
 test("configures at most two known-kind invisible pieces", () => {
   const { container } = render(<App />);
+  expect((screen.getByLabelText("最大解数") as HTMLInputElement).value).toBe("20");
   const openButton = screen.getByRole("button", { name: "入力を開く" });
   expect(openButton.closest(".card-header")).not.toBeNull();
   expect(openButton.textContent).toBe("");
@@ -116,6 +117,7 @@ test("configures at most two known-kind invisible pieces", () => {
   ).not.toBe(0);
   expect(panel.getByRole("button", { name: "盤面・フォーム" })).not.toBeNull();
   expect(panel.getByLabelText("手数")).not.toBeNull();
+  expect((panel.getByLabelText("最大解数") as HTMLInputElement).value).toBe("20");
   expect(panel.queryByText("最大手数")).toBeNull();
   expect(panel.getByRole("button", { name: "双玉のみ" })).not.toBeNull();
   expect(
@@ -700,4 +702,53 @@ test("copies only formatted solutions", async () => {
       "3. 84▲(64) まで 1手",
     ].join("\n"),
   );
+});
+
+test("shows candidates after a clicked solution move", async () => {
+  const { container } = render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "検討" }));
+  act(() => {
+    workerInstances[0].onmessage?.({ data: { type: "ready" } } as MessageEvent);
+    workerInstances[0].onmessage?.({
+      data: {
+        type: "solved",
+        requestId: 1,
+        responseJson: JSON.stringify({
+          worldCount: 2,
+          candidates: [{ id: 1, kinds: ["R", "+R"] }],
+          solutions: [["84▲(64)", "83玉"]],
+          solutionCandidates: [
+            [
+              [{ id: 1, kinds: ["R"] }],
+              [{ id: 1, kinds: ["+R"] }],
+            ],
+          ],
+        }),
+      },
+    } as MessageEvent);
+  });
+
+  expect(await screen.findByText("駒種候補（初形）")).not.toBeNull();
+  const table = container.querySelector(".variable-result-table")!;
+  expect(within(table as HTMLElement).getByText("飛、龍")).not.toBeNull();
+
+  fireEvent.click(
+    screen.getByRole("button", { name: "解1の1手目 84▲(64)" }),
+  );
+  expect(
+    within(table as HTMLElement).getByText("駒種候補（解1：1手目指了図）"),
+  ).not.toBeNull();
+  expect(within(table as HTMLElement).getByText("飛")).not.toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: "解1の2手目 83玉" }));
+  expect(
+    within(table as HTMLElement).getByText("駒種候補（解1：2手目指了図）"),
+  ).not.toBeNull();
+  expect(within(table as HTMLElement).getByText("龍")).not.toBeNull();
+
+  fireEvent.click(
+    screen.getByRole("button", { name: "駒種候補（初形）に戻す" }),
+  );
+  expect(within(table as HTMLElement).getByText("駒種候補（初形）")).not.toBeNull();
+  expect(within(table as HTMLElement).getByText("飛、龍")).not.toBeNull();
 });
