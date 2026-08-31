@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, time::Instant};
 
 use anyhow::{bail, Context, Result};
 use fmrs_core::{
@@ -7,8 +7,8 @@ use fmrs_core::{
 };
 
 use crate::{
-    ConcreteWorld, HandVariableMode, HiddenState, MateRule, VariableId, VariableLocation,
-    VariablePiece,
+    kind_set::KindSet, ConcreteWorld, EnumerationMetrics, HandVariableMode, HiddenState, MateRule,
+    ReplayHiddenState, VariableId, VariableLocation, VariablePiece,
 };
 
 const MAX_VARIABLES: usize = 6;
@@ -44,20 +44,42 @@ impl VariableProblem {
         self,
         hand_variable_mode: HandVariableMode,
     ) -> Result<HiddenState> {
-        let base = PositionAux::from_sfen(&self.base_sfen)
-            .with_context(|| format!("SFENを解釈できません: {}", self.base_sfen))?;
+        self.enumerate_explicit_with_hand_variable_mode(hand_variable_mode)
+    }
 
-        validate_specs(&base, &self.variables)?;
+    /// すべての具体世界を列挙する参照実装。
+    ///
+    /// 将来の共有・遅延バックエンドは、この結果との一致をテストする。
+    pub fn enumerate_explicit(self) -> Result<HiddenState> {
+        self.enumerate_explicit_with_hand_variable_mode(HandVariableMode::default())
+    }
 
+    pub fn enumerate_profiled(self) -> Result<(HiddenState, EnumerationMetrics)> {
+        self.enumerate_profiled_with_hand_variable_mode(HandVariableMode::default())
+    }
+
+    pub fn enumerate_profiled_with_hand_variable_mode(
+        self,
+        hand_variable_mode: HandVariableMode,
+    ) -> Result<(HiddenState, EnumerationMetrics)> {
+        let started = Instant::now();
+        let state = self.enumerate_explicit_with_hand_variable_mode(hand_variable_mode)?;
+        let metrics = EnumerationMetrics {
+            world_count: state.world_count(),
+            elapsed: started.elapsed(),
+        };
+        Ok((state, metrics))
+    }
+
+    pub fn enumerate_explicit_with_hand_variable_mode(
+        self,
+        hand_variable_mode: HandVariableMode,
+    ) -> Result<HiddenState> {
         let mut worlds = Vec::new();
-        enumerate_assignments(
-            &base,
-            &self.variables,
-            self.rule,
-            0,
-            Vec::new(),
-            &mut worlds,
-        );
+        for_each_initial_world(&self, &mut |world| {
+            worlds.push(world);
+            Ok(())
+        })?;
         if worlds.is_empty() {
             bail!("初形の合法性と矛盾しない覆面駒の割当がありません");
         }
@@ -67,6 +89,52 @@ impl VariableProblem {
             hand_variable_mode,
         ))
     }
+
+    /// 初形問題と観測履歴だけを保持し、候補世界を操作時に再生する。
+    pub fn enumerate_replay(self) -> Result<ReplayHiddenState> {
+        self.enumerate_replay_with_hand_variable_mode(HandVariableMode::default())
+    }
+
+    pub fn enumerate_replay_profiled(self) -> Result<(ReplayHiddenState, EnumerationMetrics)> {
+        self.enumerate_replay_profiled_with_hand_variable_mode(HandVariableMode::default())
+    }
+
+    pub fn enumerate_replay_with_hand_variable_mode(
+        self,
+        hand_variable_mode: HandVariableMode,
+    ) -> Result<ReplayHiddenState> {
+        ReplayHiddenState::new(self, hand_variable_mode)
+    }
+
+    pub fn enumerate_replay_profiled_with_hand_variable_mode(
+        self,
+        hand_variable_mode: HandVariableMode,
+    ) -> Result<(ReplayHiddenState, EnumerationMetrics)> {
+        let started = Instant::now();
+        let state = ReplayHiddenState::new(self, hand_variable_mode)?;
+        let metrics = EnumerationMetrics {
+            world_count: state.world_count(),
+            elapsed: started.elapsed(),
+        };
+        Ok((state, metrics))
+    }
+}
+
+pub(crate) fn for_each_initial_world(
+    problem: &VariableProblem,
+    visitor: &mut impl FnMut(ConcreteWorld) -> Result<()>,
+) -> Result<()> {
+    let base = PositionAux::from_sfen(&problem.base_sfen)
+        .with_context(|| format!("SFENを解釈できません: {}", problem.base_sfen))?;
+    validate_specs(&base, &problem.variables)?;
+    enumerate_assignments(
+        &base,
+        &problem.variables,
+        problem.rule,
+        0,
+        Vec::new(),
+        visitor,
+    )
 }
 
 fn validate_specs(base: &PositionAux, specs: &[VariableSpec]) -> Result<()> {
@@ -89,7 +157,7 @@ fn validate_specs(base: &PositionAux, specs: &[VariableSpec]) -> Result<()> {
         } else if spec.location != VariableLocation::Hand(spec.color) {
             bail!("覆面駒ID {:?} の所属と駒台が一致しません", spec.id);
         }
-        if spec.candidates.is_empty() {
+        if KindSet::from_iter(spec.candidates.iter().copied()).is_empty() {
             bail!("覆面駒ID {:?} の候補が空です", spec.id);
         }
     }
@@ -102,19 +170,15 @@ fn enumerate_assignments(
     rule: MateRule,
     index: usize,
     assigned: Vec<VariablePiece>,
-    worlds: &mut Vec<ConcreteWorld>,
-) {
+    visitor: &mut impl FnMut(ConcreteWorld) -> Result<()>,
+) -> Result<()> {
     if index == specs.len() {
-        build_worlds(base, assigned, rule, worlds);
-        return;
+        return build_worlds(base, assigned, rule, visitor);
     }
 
     let spec = &specs[index];
-    let mut unique_candidates = BTreeSet::new();
-    for &kind in &spec.candidates {
-        if !unique_candidates.insert(kind) {
-            continue;
-        }
+    let candidates = KindSet::from_iter(spec.candidates.iter().copied());
+    for kind in candidates.iter() {
         let mut next = assigned.clone();
         next.push(VariablePiece {
             id: spec.id,
@@ -122,21 +186,22 @@ fn enumerate_assignments(
             kind,
             location: spec.location,
         });
-        enumerate_assignments(base, specs, rule, index + 1, next, worlds);
+        enumerate_assignments(base, specs, rule, index + 1, next, visitor)?;
     }
+    Ok(())
 }
 
 fn build_worlds(
     base: &PositionAux,
     variables: Vec<VariablePiece>,
     rule: MateRule,
-    worlds: &mut Vec<ConcreteWorld>,
-) {
+    visitor: &mut impl FnMut(ConcreteWorld) -> Result<()>,
+) -> Result<()> {
     let mut assigned_counts = [0usize; NUM_SOURCE_KIND];
     for piece in &variables {
         let base_kind = piece.kind.maybe_unpromote();
         if base_kind.index() >= NUM_SOURCE_KIND {
-            return;
+            return Ok(());
         }
         assigned_counts[base_kind.index()] += 1;
     }
@@ -151,11 +216,11 @@ fn build_worlds(
         let used = inventory_count(base, kind);
         let max = kind.max_count() as usize;
         if used > max {
-            return;
+            return Ok(());
         }
         box_limits[index] = max - used;
         if assigned_counts[index] > white_limits[index] + box_limits[index] {
-            return;
+            return Ok(());
         }
     }
 
@@ -168,8 +233,8 @@ fn build_worlds(
         &box_limits,
         0,
         [0; NUM_SOURCE_KIND],
-        worlds,
-    );
+        visitor,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -182,13 +247,13 @@ fn enumerate_source_counts(
     box_limits: &[usize; NUM_SOURCE_KIND],
     index: usize,
     mut white_consumed: [usize; NUM_SOURCE_KIND],
-    worlds: &mut Vec<ConcreteWorld>,
-) {
+    visitor: &mut impl FnMut(ConcreteWorld) -> Result<()>,
+) -> Result<()> {
     if index == NUM_SOURCE_KIND {
         if let Some(world) = build_world(base.clone(), variables.to_vec(), rule, &white_consumed) {
-            worlds.push(world);
+            visitor(world)?;
         }
-        return;
+        return Ok(());
     }
 
     let assigned = assigned_counts[index];
@@ -205,9 +270,10 @@ fn enumerate_source_counts(
             box_limits,
             index + 1,
             white_consumed,
-            worlds,
-        );
+            visitor,
+        )?;
     }
+    Ok(())
 }
 
 fn build_world(

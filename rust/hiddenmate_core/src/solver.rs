@@ -1,11 +1,14 @@
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, time::Instant};
 
+use anyhow::Result;
 use fmrs_core::{
     piece::{Color, Kind},
     position::Square,
 };
 
-use crate::{DropIdentity, HiddenState, MoveIdentity, ObservedMove};
+use crate::{
+    DropIdentity, HiddenState, MoveIdentity, ObservedMove, ReplayHiddenState, SolveMetrics,
+};
 
 pub type Solution = Vec<ObservedMove>;
 
@@ -199,8 +202,19 @@ fn japanese_kind(kind: Kind) -> &'static str {
 /// 両者は協力するため minimax ではなく、観測着手の存在探索となる。
 /// `max_solutions` に達した時点で打ち切る。
 pub fn solve_exact(initial: &HiddenState, plies: usize, max_solutions: usize) -> Vec<Solution> {
+    solve_exact_profiled(initial, plies, max_solutions).0
+}
+
+pub fn solve_exact_profiled(
+    initial: &HiddenState,
+    plies: usize,
+    max_solutions: usize,
+) -> (Vec<Solution>, SolveMetrics) {
+    let started = Instant::now();
+    let mut metrics = SolveMetrics::new(initial.world_count());
     if max_solutions == 0 {
-        return Vec::new();
+        metrics.total_elapsed = started.elapsed();
+        return (Vec::new(), metrics);
     }
 
     let mut solutions = Vec::new();
@@ -223,12 +237,14 @@ pub fn solve_exact(initial: &HiddenState, plies: usize, max_solutions: usize) ->
             &mut path,
             &mut solutions,
             &mut solution_keys,
+            &mut metrics,
         );
         if solutions.len() >= max_solutions {
             break;
         }
     }
-    solutions
+    metrics.total_elapsed = started.elapsed();
+    (solutions, metrics)
 }
 
 fn solve_inner(
@@ -238,7 +254,9 @@ fn solve_inner(
     path: &mut Solution,
     solutions: &mut Vec<Solution>,
     solution_keys: &mut BTreeSet<Vec<ObservedMove>>,
+    metrics: &mut SolveMetrics,
 ) {
+    metrics.visit_state(state.world_count());
     if solutions.len() >= max_solutions {
         return;
     }
@@ -252,10 +270,17 @@ fn solve_inner(
         return;
     }
 
-    for observed in state.observed_moves() {
-        let Some(next) = state.apply(observed) else {
+    let move_started = Instant::now();
+    let observed_moves = state.observed_moves();
+    metrics.move_generation_elapsed += move_started.elapsed();
+    for observed in observed_moves {
+        let transition_started = Instant::now();
+        let next = state.apply(observed);
+        metrics.transition_elapsed += transition_started.elapsed();
+        let Some(next) = next else {
             continue;
         };
+        metrics.record_successor(next.world_count());
         path.push(observed);
         solve_inner(
             &next,
@@ -264,12 +289,114 @@ fn solve_inner(
             path,
             solutions,
             solution_keys,
+            metrics,
         );
         path.pop();
         if solutions.len() >= max_solutions {
             break;
         }
     }
+}
+
+/// 候補世界を保持しない再生型状態を使って解を列挙する。
+pub fn solve_replay_exact(
+    initial: &ReplayHiddenState,
+    plies: usize,
+    max_solutions: usize,
+) -> Result<Vec<Solution>> {
+    solve_replay_exact_profiled(initial, plies, max_solutions).map(|(solutions, _)| solutions)
+}
+
+pub fn solve_replay_exact_profiled(
+    initial: &ReplayHiddenState,
+    plies: usize,
+    max_solutions: usize,
+) -> Result<(Vec<Solution>, SolveMetrics)> {
+    let started = Instant::now();
+    let mut metrics = SolveMetrics::new(initial.world_count());
+    if max_solutions == 0 {
+        metrics.total_elapsed = started.elapsed();
+        return Ok((Vec::new(), metrics));
+    }
+
+    let mut solutions = Vec::new();
+    let mut solution_keys = BTreeSet::new();
+    for depth in 0..=plies {
+        let turn_at_depth = if depth % 2 == 0 {
+            initial.turn()
+        } else {
+            initial.turn().opposite()
+        };
+        if turn_at_depth != initial.rule().terminal_turn() {
+            continue;
+        }
+        solve_replay_inner(
+            initial,
+            depth,
+            max_solutions,
+            &mut Vec::with_capacity(depth),
+            &mut solutions,
+            &mut solution_keys,
+            &mut metrics,
+        )?;
+        if solutions.len() >= max_solutions {
+            break;
+        }
+    }
+    metrics.total_elapsed = started.elapsed();
+    Ok((solutions, metrics))
+}
+
+fn solve_replay_inner(
+    state: &ReplayHiddenState,
+    remaining: usize,
+    max_solutions: usize,
+    path: &mut Solution,
+    solutions: &mut Vec<Solution>,
+    solution_keys: &mut BTreeSet<Vec<ObservedMove>>,
+    metrics: &mut SolveMetrics,
+) -> Result<()> {
+    metrics.visit_state(state.world_count());
+    if solutions.len() >= max_solutions {
+        return Ok(());
+    }
+    if remaining == 0 {
+        if state.is_proven_mate()? && solution_keys.insert(solution_key(path)) {
+            solutions.push(path.clone());
+        }
+        return Ok(());
+    }
+    if state.is_proven_mate()? {
+        return Ok(());
+    }
+
+    let move_started = Instant::now();
+    let observed_moves = state.observed_moves()?;
+    metrics.move_generation_elapsed += move_started.elapsed();
+    for observed in observed_moves {
+        let transition_started = Instant::now();
+        let next = state.apply(observed)?;
+        metrics.transition_elapsed += transition_started.elapsed();
+        let Some(next) = next else {
+            continue;
+        };
+        metrics.record_successor(next.world_count());
+        path.push(observed);
+        solve_replay_inner(
+            &next,
+            remaining - 1,
+            max_solutions,
+            path,
+            solutions,
+            solution_keys,
+            metrics,
+        )?;
+        path.pop();
+        if solutions.len() >= max_solutions {
+            break;
+        }
+    }
+    Ok(())
 }
 
 /// 覆面駒の個体IDだけが異なる手順は、同じ表示解として数える。

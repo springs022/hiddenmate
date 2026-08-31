@@ -1,4 +1,8 @@
-use std::collections::BTreeMap;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::{Arc, OnceLock},
+    time::Instant,
+};
 
 use anyhow::{bail, Context, Result};
 use fmrs_core::{
@@ -12,7 +16,7 @@ use fmrs_core::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{DropIdentity, MateRule, MoveIdentity, ObservedMove};
+use crate::{DropIdentity, EnumerationMetrics, MateRule, MoveIdentity, ObservedMove, SolveMetrics};
 
 const MAX_KNOWN_INVISIBLES: usize = 2;
 const MAX_WORLDS: usize = 20_000;
@@ -116,6 +120,38 @@ enum InvisibleLocation {
     Hand(Color),
 }
 
+/// 盤上81マスと両者の駒台を1つのビット集合で表す。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct InvisibleLocationSet(u128);
+
+impl InvisibleLocationSet {
+    fn insert(&mut self, location: InvisibleLocation) {
+        self.0 |= 1u128 << location_index(location);
+    }
+
+    fn iter(self) -> impl Iterator<Item = InvisibleLocation> {
+        (0..83).filter_map(move |index| {
+            if self.0 & (1u128 << index) == 0 {
+                return None;
+            }
+            Some(match index {
+                0..=80 => InvisibleLocation::Board(Square::from_index(index)),
+                81 => InvisibleLocation::Hand(Color::BLACK),
+                82 => InvisibleLocation::Hand(Color::WHITE),
+                _ => unreachable!("位置ビットは83個"),
+            })
+        })
+    }
+}
+
+fn location_index(location: InvisibleLocation) -> usize {
+    match location {
+        InvisibleLocation::Board(square) => square.index(),
+        InvisibleLocation::Hand(color) if color.is_black() => 81,
+        InvisibleLocation::Hand(_) => 82,
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct InvisiblePiece {
     color: Color,
@@ -125,7 +161,7 @@ struct InvisiblePiece {
 
 #[derive(Clone, Debug)]
 struct InvisibleWorld {
-    position: PositionAux,
+    position: Arc<PositionAux>,
     invisibles: Vec<InvisiblePiece>,
 }
 
@@ -133,7 +169,7 @@ impl InvisibleWorld {
     fn new(position: PositionAux, mut invisibles: Vec<InvisiblePiece>) -> Self {
         invisibles.sort_unstable();
         Self {
-            position,
+            position: Arc::new(position),
             invisibles,
         }
     }
@@ -141,7 +177,7 @@ impl InvisibleWorld {
     fn key(&self) -> String {
         format!(
             "{}|{:?}",
-            sfen::encode_position(&self.position),
+            sfen::encode_position(self.position.as_ref()),
             self.invisibles
         )
     }
@@ -228,7 +264,7 @@ impl InvisibleWorld {
     ) -> Self {
         let mover = self.position.turn();
         let mut next = self.clone();
-        next.position.do_move(&movement);
+        Arc::make_mut(&mut next.position).do_move(&movement);
         if let Some(index) = captured_hidden {
             let captured = &mut next.invisibles[index];
             captured.color = mover;
@@ -263,31 +299,97 @@ pub struct KnownInvisibleState {
 
 impl KnownInvisibleProblem {
     pub fn enumerate(self) -> Result<KnownInvisibleState> {
-        let base = PositionAux::from_sfen(&self.base_sfen)
-            .with_context(|| format!("SFENを解釈できません: {}", self.base_sfen))?;
-        let mut specs = self.invisibles;
-        specs.sort_unstable();
+        self.enumerate_explicit()
+    }
+
+    /// すべての具体世界を列挙する参照実装。
+    ///
+    /// 将来の共有・遅延バックエンドは、この結果との一致をテストする。
+    pub fn enumerate_explicit(self) -> Result<KnownInvisibleState> {
         let mut worlds = BTreeMap::new();
-        for allocated_base in allocate_invisible_inventory(&base, &specs)? {
-            enumerate_locations(
-                &allocated_base,
-                &specs,
-                0,
-                Vec::new(),
-                self.rule,
-                &mut worlds,
-            )?;
-        }
+        let free_white_move = for_each_initial_world(&self, &mut |world| {
+            worlds.entry(world.key()).or_insert(world);
+            if worlds.len() > MAX_WORLDS {
+                bail!("候補世界が上限の{MAX_WORLDS}件を超えました");
+            }
+            Ok(())
+        })?;
         if worlds.is_empty() {
             bail!("初形の合法性と矛盾しない透明駒の配置がありません");
         }
-        let free_white_move = base.turn().is_white();
         Ok(KnownInvisibleState::from_worlds(
             worlds.into_values().collect(),
             free_white_move,
             self.rule,
         ))
     }
+
+    pub fn enumerate_profiled(self) -> Result<(KnownInvisibleState, EnumerationMetrics)> {
+        let started = Instant::now();
+        let state = self.enumerate_explicit()?;
+        let metrics = EnumerationMetrics {
+            world_count: state.world_count(),
+            elapsed: started.elapsed(),
+        };
+        Ok((state, metrics))
+    }
+
+    /// 初形問題と観測履歴だけを保持し、候補世界を操作時に再生する。
+    pub fn enumerate_replay(self) -> Result<ReplayKnownInvisibleState> {
+        ReplayKnownInvisibleState::new(self)
+    }
+
+    pub fn enumerate_replay_profiled(
+        self,
+    ) -> Result<(ReplayKnownInvisibleState, EnumerationMetrics)> {
+        let started = Instant::now();
+        let state = ReplayKnownInvisibleState::new(self)?;
+        let metrics = EnumerationMetrics {
+            world_count: state.world_count(),
+            elapsed: started.elapsed(),
+        };
+        Ok((state, metrics))
+    }
+}
+
+fn for_each_initial_world(
+    problem: &KnownInvisibleProblem,
+    visitor: &mut impl FnMut(InvisibleWorld) -> Result<()>,
+) -> Result<bool> {
+    let base = PositionAux::from_sfen(&problem.base_sfen)
+        .with_context(|| format!("SFENを解釈できません: {}", problem.base_sfen))?;
+    let mut specs = problem.invisibles.clone();
+    specs.sort_unstable();
+    let location_domains = specs
+        .iter()
+        .map(|spec| initial_location_domain(&base, *spec))
+        .collect::<Vec<_>>();
+    for allocated_base in allocate_invisible_inventory(&base, &specs)? {
+        generate_locations(
+            &allocated_base,
+            &specs,
+            &location_domains,
+            0,
+            Vec::new(),
+            problem.rule,
+            visitor,
+        )?;
+    }
+    Ok(base.turn().is_white())
+}
+
+fn initial_location_domain(base: &PositionAux, spec: KnownInvisibleSpec) -> InvisibleLocationSet {
+    let mut result = InvisibleLocationSet::default();
+    for raw in 0..81 {
+        let square = Square::from_index(raw);
+        if base.get(square).is_none() {
+            result.insert(InvisibleLocation::Board(square));
+        }
+    }
+    if spec.kind.index() < fmrs_core::piece::NUM_HAND_KIND {
+        result.insert(InvisibleLocation::Hand(spec.color));
+    }
+    result
 }
 
 fn allocate_invisible_inventory(
@@ -355,13 +457,14 @@ fn inventory_count(base: &PositionAux, kind: Kind) -> usize {
     used
 }
 
-fn enumerate_locations(
+fn generate_locations(
     base: &PositionAux,
     specs: &[KnownInvisibleSpec],
+    location_domains: &[InvisibleLocationSet],
     index: usize,
     pieces: Vec<InvisiblePiece>,
     rule: MateRule,
-    worlds: &mut BTreeMap<String, InvisibleWorld>,
+    visitor: &mut impl FnMut(InvisibleWorld) -> Result<()>,
 ) -> Result<()> {
     if index == specs.len() {
         let mut position = base.clone();
@@ -372,33 +475,21 @@ fn enumerate_locations(
             }
         }
         if legal_initial_world(&position, rule) {
-            let world = InvisibleWorld::new(position, pieces);
-            worlds.entry(world.key()).or_insert(world);
-            if worlds.len() > MAX_WORLDS {
-                bail!("候補世界が上限の{MAX_WORLDS}件を超えました");
-            }
+            visitor(InvisibleWorld::new(position, pieces))?;
         }
         return Ok(());
     }
 
     let spec = specs[index];
-    for raw in 0..=81 {
-        let location = if raw == 81 {
-            if spec.kind.index() >= fmrs_core::piece::NUM_HAND_KIND {
-                continue;
-            }
-            InvisibleLocation::Hand(spec.color)
-        } else {
-            let square = Square::from_index(raw);
-            if base.get(square).is_some()
-                || pieces
-                    .iter()
-                    .any(|piece| piece.location == InvisibleLocation::Board(square))
+    for location in location_domains[index].iter() {
+        if let InvisibleLocation::Board(square) = location {
+            if pieces
+                .iter()
+                .any(|piece| piece.location == InvisibleLocation::Board(square))
             {
                 continue;
             }
-            InvisibleLocation::Board(square)
-        };
+        }
         if index > 0 && specs[index - 1] == spec {
             if let Some(previous) = pieces.last() {
                 if location < previous.location {
@@ -412,7 +503,15 @@ fn enumerate_locations(
             kind: spec.kind,
             location,
         });
-        enumerate_locations(base, specs, index + 1, next, rule, worlds)?;
+        generate_locations(
+            base,
+            specs,
+            location_domains,
+            index + 1,
+            next,
+            rule,
+            visitor,
+        )?;
     }
     Ok(())
 }
@@ -524,7 +623,7 @@ impl KnownInvisibleState {
             return false;
         }
         self.worlds.iter().all(|world| {
-            let mut position = world.position.clone();
+            let mut position = world.position.as_ref().clone();
             match self.rule {
                 MateRule::Helpmate => {
                     let mut movements = Vec::new();
@@ -541,8 +640,227 @@ impl KnownInvisibleState {
     }
 }
 
+/// 候補世界を保持せず、初形生成器と観測履歴から必要時に再生する状態。
+#[derive(Clone, Debug)]
+pub struct ReplayKnownInvisibleState {
+    problem: Arc<KnownInvisibleProblem>,
+    history: Vec<KnownInvisibleObservedMove>,
+    /// 初形、および各観測着手後に可視化された透明駒。
+    resolved_steps: Vec<Vec<InvisiblePiece>>,
+    world_count: usize,
+    initial_turn: Color,
+    free_white_move: bool,
+    rule: MateRule,
+    observed_moves_cache: Arc<OnceLock<Vec<KnownInvisibleObservedMove>>>,
+    mate_cache: Arc<OnceLock<bool>>,
+}
+
+impl ReplayKnownInvisibleState {
+    fn new(problem: KnownInvisibleProblem) -> Result<Self> {
+        let mut common = None;
+        let mut generated = 0usize;
+        let free_white_move = for_each_initial_world(&problem, &mut |world| {
+            generated += 1;
+            retain_common_invisibles(&mut common, &world.invisibles);
+            Ok(())
+        })?;
+        if generated == 0 {
+            bail!("初形の合法性と矛盾しない透明駒の配置がありません");
+        }
+        let resolved = common.unwrap_or_default();
+        let mut keys = BTreeSet::new();
+        for_each_initial_world(&problem, &mut |mut world| {
+            remove_resolved_invisibles(&mut world, &resolved);
+            keys.insert(world.key());
+            if keys.len() > MAX_WORLDS {
+                bail!("候補世界が上限の{MAX_WORLDS}件を超えました");
+            }
+            Ok(())
+        })?;
+        let initial_turn = PositionAux::from_sfen(&problem.base_sfen)
+            .with_context(|| format!("SFENを解釈できません: {}", problem.base_sfen))?
+            .turn();
+        Ok(Self {
+            problem: Arc::new(problem.clone()),
+            history: Vec::new(),
+            resolved_steps: vec![resolved],
+            world_count: keys.len(),
+            initial_turn,
+            free_white_move,
+            rule: problem.rule,
+            observed_moves_cache: Arc::new(OnceLock::new()),
+            mate_cache: Arc::new(OnceLock::new()),
+        })
+    }
+
+    pub fn world_count(&self) -> usize {
+        self.world_count
+    }
+
+    pub fn turn(&self) -> Color {
+        if self.history.len() % 2 == 0 {
+            self.initial_turn
+        } else {
+            self.initial_turn.opposite()
+        }
+    }
+
+    pub fn observed_moves(&self) -> Result<Vec<KnownInvisibleObservedMove>> {
+        if let Some(cached) = self.observed_moves_cache.get() {
+            return Ok(cached.clone());
+        }
+        let mut result = BTreeSet::new();
+        let free_white_move = self.history.is_empty() && self.free_white_move;
+        self.for_each_world(&mut |world| {
+            for movement in concrete_movements(&world, free_white_move) {
+                for (observed, _) in world.transition_variants(movement) {
+                    result.insert(observed);
+                }
+            }
+            Ok(())
+        })?;
+        let result = result.into_iter().collect::<Vec<_>>();
+        let _ = self.observed_moves_cache.set(result.clone());
+        Ok(result)
+    }
+
+    pub fn apply(&self, observed: KnownInvisibleObservedMove) -> Result<Option<Self>> {
+        let mut next_worlds = BTreeMap::new();
+        let free_white_move = self.history.is_empty() && self.free_white_move;
+        self.for_each_world(&mut |world| {
+            for movement in concrete_movements(&world, free_white_move) {
+                for (candidate, next) in world.transition_variants(movement) {
+                    if candidate == observed {
+                        next_worlds.entry(next.key()).or_insert(next);
+                    }
+                }
+            }
+            if next_worlds.len() > MAX_WORLDS {
+                bail!("着手後の候補世界が上限の{MAX_WORLDS}件を超えました");
+            }
+            Ok(())
+        })?;
+        if next_worlds.is_empty() {
+            return Ok(None);
+        }
+
+        let mut common = None;
+        for world in next_worlds.values() {
+            retain_common_invisibles(&mut common, &world.invisibles);
+        }
+        let resolved = common.unwrap_or_default();
+        let mut normalized = BTreeMap::new();
+        for (_, mut world) in next_worlds {
+            remove_resolved_invisibles(&mut world, &resolved);
+            normalized.entry(world.key()).or_insert(world);
+        }
+
+        let mut next = self.clone();
+        next.history.push(observed);
+        next.resolved_steps.push(resolved);
+        next.world_count = normalized.len();
+        next.observed_moves_cache = Arc::new(OnceLock::new());
+        next.mate_cache = Arc::new(OnceLock::new());
+        Ok(Some(next))
+    }
+
+    pub fn is_proven_mate(&self) -> Result<bool> {
+        if let Some(&cached) = self.mate_cache.get() {
+            return Ok(cached);
+        }
+        if self.turn() != self.rule.terminal_turn() {
+            let _ = self.mate_cache.set(false);
+            return Ok(false);
+        }
+        let mut all_mated = true;
+        self.for_each_world(&mut |world| {
+            let mut position = world.position.as_ref().clone();
+            let mated = match self.rule {
+                MateRule::Helpmate => {
+                    let mut movements = Vec::new();
+                    matches!(
+                        advance_aux(&mut position, &AdvanceOptions::default(), &mut movements),
+                        Ok(true)
+                    ) && movements.is_empty()
+                }
+                MateRule::HelpSelfmate => {
+                    fmrs_core::solve::help_selfmate::is_help_selfmate(&mut position)
+                }
+            };
+            all_mated &= mated;
+            Ok(())
+        })?;
+        let _ = self.mate_cache.set(all_mated);
+        Ok(all_mated)
+    }
+
+    fn for_each_world(&self, visitor: &mut impl FnMut(InvisibleWorld) -> Result<()>) -> Result<()> {
+        for_each_initial_world(&self.problem, &mut |mut initial| {
+            remove_resolved_invisibles(&mut initial, &self.resolved_steps[0]);
+            let mut frontier = vec![initial];
+            for (step, observed) in self.history.iter().copied().enumerate() {
+                let mut next_frontier = Vec::new();
+                for world in frontier {
+                    let free_white_move = step == 0 && self.free_white_move;
+                    for movement in concrete_movements(&world, free_white_move) {
+                        for (candidate, mut next) in world.transition_variants(movement) {
+                            if candidate == observed {
+                                remove_resolved_invisibles(
+                                    &mut next,
+                                    &self.resolved_steps[step + 1],
+                                );
+                                next_frontier.push(next);
+                            }
+                        }
+                    }
+                }
+                frontier = next_frontier;
+                if frontier.is_empty() {
+                    break;
+                }
+            }
+            for world in frontier {
+                visitor(world)?;
+            }
+            Ok(())
+        })?;
+        Ok(())
+    }
+}
+
+fn retain_common_invisibles(
+    common: &mut Option<Vec<InvisiblePiece>>,
+    candidates: &[InvisiblePiece],
+) {
+    let Some(current) = common.as_mut() else {
+        *common = Some(candidates.to_vec());
+        return;
+    };
+    let mut available = candidates.to_vec();
+    current.retain(|piece| {
+        if let Some(index) = available.iter().position(|candidate| candidate == piece) {
+            available.remove(index);
+            true
+        } else {
+            false
+        }
+    });
+}
+
+fn remove_resolved_invisibles(world: &mut InvisibleWorld, resolved: &[InvisiblePiece]) {
+    for piece in resolved {
+        if let Some(index) = world
+            .invisibles
+            .iter()
+            .position(|candidate| candidate == piece)
+        {
+            world.invisibles.remove(index);
+        }
+    }
+}
+
 fn concrete_movements(world: &InvisibleWorld, free_white_move: bool) -> Vec<Movement> {
-    let mut position = world.position.clone();
+    let mut position = world.position.as_ref().clone();
     let mut movements = Vec::new();
     if free_white_move {
         legal_movements(&position, &mut movements);
@@ -555,7 +873,7 @@ fn concrete_movements(world: &InvisibleWorld, free_white_move: bool) -> Vec<Move
             if !movement.is_pawn_drop() {
                 return true;
             }
-            let mut next = world.position.clone();
+            let mut next = world.position.as_ref().clone();
             next.do_move(movement);
             !is_legal_mate(&mut next)
         })
@@ -576,6 +894,17 @@ pub fn solve_known_invisible_exact(
     plies: usize,
     max_solutions: usize,
 ) -> Result<Vec<KnownInvisibleSolution>> {
+    solve_known_invisible_exact_profiled(initial, plies, max_solutions)
+        .map(|(solutions, _)| solutions)
+}
+
+pub fn solve_known_invisible_exact_profiled(
+    initial: &KnownInvisibleState,
+    plies: usize,
+    max_solutions: usize,
+) -> Result<(Vec<KnownInvisibleSolution>, SolveMetrics)> {
+    let started = Instant::now();
+    let mut metrics = SolveMetrics::new(initial.world_count());
     let mut solutions = Vec::new();
     for depth in 0..=plies {
         let turn = if depth % 2 == 0 {
@@ -592,12 +921,111 @@ pub fn solve_known_invisible_exact(
             max_solutions,
             &mut Vec::new(),
             &mut solutions,
+            &mut metrics,
         )?;
         if solutions.len() >= max_solutions {
             break;
         }
     }
-    Ok(solutions)
+    metrics.total_elapsed = started.elapsed();
+    Ok((solutions, metrics))
+}
+
+/// 候補世界を保持しない再生型状態を使い、指定手数以下の解を短い順に列挙する。
+pub fn solve_replay_known_invisible_exact(
+    initial: &ReplayKnownInvisibleState,
+    plies: usize,
+    max_solutions: usize,
+) -> Result<Vec<KnownInvisibleSolution>> {
+    solve_replay_known_invisible_exact_profiled(initial, plies, max_solutions)
+        .map(|(solutions, _)| solutions)
+}
+
+pub fn solve_replay_known_invisible_exact_profiled(
+    initial: &ReplayKnownInvisibleState,
+    plies: usize,
+    max_solutions: usize,
+) -> Result<(Vec<KnownInvisibleSolution>, SolveMetrics)> {
+    let started = Instant::now();
+    let mut metrics = SolveMetrics::new(initial.world_count());
+    if max_solutions == 0 {
+        metrics.total_elapsed = started.elapsed();
+        return Ok((Vec::new(), metrics));
+    }
+
+    let mut solutions = Vec::new();
+    for depth in 0..=plies {
+        let turn = if depth % 2 == 0 {
+            initial.turn()
+        } else {
+            initial.turn().opposite()
+        };
+        if turn != initial.rule.terminal_turn() {
+            continue;
+        }
+        solve_replay_inner(
+            initial,
+            depth,
+            max_solutions,
+            &mut Vec::with_capacity(depth),
+            &mut solutions,
+            &mut metrics,
+        )?;
+        if solutions.len() >= max_solutions {
+            break;
+        }
+    }
+    metrics.total_elapsed = started.elapsed();
+    Ok((solutions, metrics))
+}
+
+fn solve_replay_inner(
+    state: &ReplayKnownInvisibleState,
+    remaining: usize,
+    max_solutions: usize,
+    path: &mut KnownInvisibleSolution,
+    solutions: &mut Vec<KnownInvisibleSolution>,
+    metrics: &mut SolveMetrics,
+) -> Result<()> {
+    metrics.visit_state(state.world_count());
+    if solutions.len() >= max_solutions {
+        return Ok(());
+    }
+    if remaining == 0 {
+        if state.is_proven_mate()? && !solutions.contains(path) {
+            solutions.push(path.clone());
+        }
+        return Ok(());
+    }
+    if state.is_proven_mate()? {
+        return Ok(());
+    }
+
+    let move_generation_started = Instant::now();
+    let observed_moves = state.observed_moves()?;
+    metrics.move_generation_elapsed += move_generation_started.elapsed();
+    for observed in observed_moves {
+        let transition_started = Instant::now();
+        let Some(next) = state.apply(observed)? else {
+            continue;
+        };
+        metrics.transition_elapsed += transition_started.elapsed();
+        metrics.record_successor(next.world_count());
+        path.push(observed);
+        solve_replay_inner(
+            &next,
+            remaining - 1,
+            max_solutions,
+            path,
+            solutions,
+            metrics,
+        )?;
+        path.pop();
+        if solutions.len() >= max_solutions {
+            break;
+        }
+    }
+    Ok(())
 }
 
 fn solve_inner(
@@ -606,7 +1034,9 @@ fn solve_inner(
     max_solutions: usize,
     path: &mut KnownInvisibleSolution,
     solutions: &mut Vec<KnownInvisibleSolution>,
+    metrics: &mut SolveMetrics,
 ) -> Result<()> {
+    metrics.visit_state(state.world_count());
     if solutions.len() >= max_solutions {
         return Ok(());
     }
@@ -619,10 +1049,23 @@ fn solve_inner(
     if state.is_proven_mate() {
         return Ok(());
     }
-    for (observed, worlds) in state.successors()? {
+    let transition_started = Instant::now();
+    let successors = state.successors()?;
+    let transition_elapsed = transition_started.elapsed();
+    metrics.move_generation_elapsed += transition_elapsed;
+    metrics.transition_elapsed += transition_elapsed;
+    for (observed, worlds) in successors {
+        metrics.record_successor(worlds.len());
         let next = KnownInvisibleState::from_worlds(worlds, false, state.rule);
         path.push(observed);
-        solve_inner(&next, remaining - 1, max_solutions, path, solutions)?;
+        solve_inner(
+            &next,
+            remaining - 1,
+            max_solutions,
+            path,
+            solutions,
+            metrics,
+        )?;
         path.pop();
         if solutions.len() >= max_solutions {
             break;
@@ -915,5 +1358,118 @@ mod tests {
             .worlds
             .iter()
             .all(|world| !world.invisibles.contains(&fixed)));
+    }
+
+    #[test]
+    fn default_and_explicit_enumeration_match_and_metrics_are_reported() {
+        let problem = KnownInvisibleProblem {
+            base_sfen: "7k1/9/7K1/9/9/9/9/9/9 b - 1".to_string(),
+            invisibles: vec![KnownInvisibleSpec {
+                color: Color::BLACK,
+                kind: Kind::Lance,
+            }],
+            rule: MateRule::Helpmate,
+        };
+
+        let default = problem.clone().enumerate().unwrap();
+        let explicit = problem.clone().enumerate_explicit().unwrap();
+        let (profiled, enumeration) = problem.enumerate_profiled().unwrap();
+
+        assert_eq!(default.world_count(), 71);
+        assert_eq!(default.world_count(), explicit.world_count());
+        assert_eq!(
+            default
+                .worlds
+                .iter()
+                .map(InvisibleWorld::key)
+                .collect::<Vec<_>>(),
+            explicit
+                .worlds
+                .iter()
+                .map(InvisibleWorld::key)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(enumeration.world_count, profiled.world_count());
+
+        let expected = solve_known_invisible_exact(&default, 5, 1).unwrap();
+        let (actual, metrics) = solve_known_invisible_exact_profiled(&profiled, 5, 1).unwrap();
+        assert_eq!(actual, expected);
+        assert_eq!(metrics.initial_world_count, 71);
+        assert!(metrics.visited_state_count > 0);
+        assert!(metrics.generated_transition_count > 0);
+    }
+
+    #[test]
+    fn replay_backend_matches_explicit_backend() {
+        let problem = KnownInvisibleProblem {
+            base_sfen: "7k1/9/7K1/9/9/9/9/9/9 b - 1".to_string(),
+            invisibles: vec![KnownInvisibleSpec {
+                color: Color::BLACK,
+                kind: Kind::Lance,
+            }],
+            rule: MateRule::Helpmate,
+        };
+        let explicit = problem.clone().enumerate_explicit().unwrap();
+        let (replay, enumeration) = problem.enumerate_replay_profiled().unwrap();
+
+        assert_eq!(replay.world_count(), explicit.world_count());
+        assert_eq!(enumeration.world_count, explicit.world_count());
+        assert_eq!(replay.turn(), explicit.turn());
+        assert_eq!(
+            replay
+                .observed_moves()
+                .unwrap()
+                .into_iter()
+                .collect::<BTreeSet<_>>(),
+            explicit.successors().unwrap().into_keys().collect()
+        );
+
+        let expected = solve_known_invisible_exact(&explicit, 5, 2).unwrap();
+        let (actual, metrics) = solve_replay_known_invisible_exact_profiled(&replay, 5, 2).unwrap();
+        assert_eq!(actual, expected);
+        assert_eq!(metrics.initial_world_count, explicit.world_count());
+        assert!(metrics.visited_state_count > 0);
+    }
+
+    #[test]
+    fn replay_apply_matches_explicit_successor_counts() {
+        let problem = KnownInvisibleProblem {
+            base_sfen: "7k1/9/7K1/9/9/9/9/9/9 b - 1".to_string(),
+            invisibles: vec![KnownInvisibleSpec {
+                color: Color::BLACK,
+                kind: Kind::Lance,
+            }],
+            rule: MateRule::Helpmate,
+        };
+        let explicit = problem.clone().enumerate_explicit().unwrap();
+        let replay = problem.enumerate_replay().unwrap();
+
+        for (observed, worlds) in explicit.successors().unwrap() {
+            let next = replay.apply(observed).unwrap().unwrap();
+            let normalized = KnownInvisibleState::from_worlds(worlds, false, MateRule::Helpmate);
+            assert_eq!(next.world_count(), normalized.world_count(), "{observed:?}");
+            assert_eq!(next.turn(), normalized.turn(), "{observed:?}");
+            assert_eq!(next.is_proven_mate().unwrap(), normalized.is_proven_mate());
+        }
+    }
+
+    #[test]
+    fn replay_backend_matches_free_white_help_selfmate() {
+        let problem = KnownInvisibleProblem {
+            base_sfen: "9/9/9/9/7l1/9/8k/9/7SK w G 1".to_string(),
+            invisibles: vec![],
+            rule: MateRule::HelpSelfmate,
+        };
+        let explicit = problem.clone().enumerate_explicit().unwrap();
+        let replay = problem.enumerate_replay().unwrap();
+
+        assert_eq!(
+            replay.observed_moves().unwrap().len(),
+            explicit.successors().unwrap().len()
+        );
+        assert_eq!(
+            solve_replay_known_invisible_exact(&replay, 3, 100).unwrap(),
+            solve_known_invisible_exact(&explicit, 3, 100).unwrap()
+        );
     }
 }

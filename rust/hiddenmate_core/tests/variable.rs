@@ -3,8 +3,9 @@ use fmrs_core::{
     position::Square,
 };
 use hiddenmate_core::{
-    format_solution_japanese, solve_exact, DropIdentity, HandVariableMode, MateRule, MoveIdentity,
-    ObservedMove, VariableId, VariableLocation, VariableProblem, VariableSpec,
+    format_solution_japanese, solve_exact, solve_replay_exact, DropIdentity, HandVariableMode,
+    MateRule, MoveIdentity, ObservedMove, VariableId, VariableLocation, VariableProblem,
+    VariableSpec,
 };
 
 fn square(file: usize, rank: usize) -> Square {
@@ -207,6 +208,55 @@ fn enumerates_candidate_worlds_from_piece_box() {
         assert_eq!(world.position().hands().count(Color::WHITE, Kind::Rook), 0);
         assert_eq!(world.position().hands().count(Color::WHITE, Kind::Pawn), 0);
     }
+}
+
+#[test]
+fn default_and_explicit_backends_match_worlds_moves_and_solutions() {
+    let problem = VariableProblem {
+        base_sfen: "9/9/kS7/N8/1L7/9/9/9/9 b - 1".to_string(),
+        rule: MateRule::Helpmate,
+        variables: vec![VariableSpec {
+            id: VariableId(1),
+            color: Color::BLACK,
+            location: VariableLocation::Board(square(6, 4)),
+            candidates: vec![Kind::Rook, Kind::ProRook, Kind::Rook],
+        }],
+    };
+
+    let default = problem.clone().enumerate().unwrap();
+    let explicit = problem.enumerate_explicit().unwrap();
+
+    assert_eq!(default.world_count(), explicit.world_count());
+    assert_eq!(default.all_candidates(), explicit.all_candidates());
+    assert_eq!(default.observed_moves(), explicit.observed_moves());
+    assert_eq!(
+        solve_exact(&default, 3, 100),
+        solve_exact(&explicit, 3, 100)
+    );
+}
+
+#[test]
+fn profiled_enumeration_and_solve_report_candidate_counts() {
+    let problem = VariableProblem {
+        base_sfen: "9/9/kS7/N8/1L7/9/9/9/9 b - 1".to_string(),
+        rule: MateRule::Helpmate,
+        variables: vec![VariableSpec {
+            id: VariableId(1),
+            color: Color::BLACK,
+            location: VariableLocation::Board(square(6, 4)),
+            candidates: vec![Kind::Rook, Kind::ProRook],
+        }],
+    };
+
+    let (state, enumeration) = problem.enumerate_profiled().unwrap();
+    let (solutions, solve_metrics) = hiddenmate_core::solve_exact_profiled(&state, 1, 10);
+
+    assert_eq!(enumeration.world_count, state.world_count());
+    assert_eq!(solutions, solve_exact(&state, 1, 10));
+    assert_eq!(solve_metrics.initial_world_count, state.world_count());
+    assert!(solve_metrics.visited_state_count > 0);
+    assert!(solve_metrics.generated_transition_count > 0);
+    assert!(solve_metrics.peak_world_count >= state.world_count());
 }
 
 #[test]
@@ -631,5 +681,81 @@ fn japanese_notation_uses_same_and_nonpromotion() {
     assert_eq!(
         format_solution_japanese(&state, &solution),
         vec!["31飛打", "39▲(49)", "同飛生(31)"]
+    );
+}
+
+#[test]
+fn replay_backend_matches_explicit_backend() {
+    let problem = VariableProblem {
+        base_sfen: "9/9/kS7/9/1L7/9/9/9/9 b 2r2b4g3s4n3l18p 1".to_string(),
+        rule: MateRule::Helpmate,
+        variables: vec![
+            VariableSpec {
+                id: VariableId(1),
+                color: Color::BLACK,
+                location: VariableLocation::Hand(Color::BLACK),
+                candidates: fmrs_core::piece::KINDS[..7].to_vec(),
+            },
+            VariableSpec {
+                id: VariableId(2),
+                color: Color::BLACK,
+                location: VariableLocation::Hand(Color::BLACK),
+                candidates: fmrs_core::piece::KINDS[..7].to_vec(),
+            },
+        ],
+    };
+    for mode in [
+        HandVariableMode::Indistinguishable,
+        HandVariableMode::Distinguishable,
+    ] {
+        let explicit = problem
+            .clone()
+            .enumerate_explicit_with_hand_variable_mode(mode)
+            .unwrap();
+        let (replay, enumeration) = problem
+            .clone()
+            .enumerate_replay_profiled_with_hand_variable_mode(mode)
+            .unwrap();
+
+        assert_eq!(replay.world_count(), explicit.world_count());
+        assert_eq!(enumeration.world_count, explicit.world_count());
+        assert_eq!(replay.turn(), explicit.turn());
+        assert_eq!(replay.hand_variable_mode(), explicit.hand_variable_mode());
+        assert_eq!(replay.observed_moves().unwrap(), explicit.observed_moves());
+        for id in [VariableId(1), VariableId(2)] {
+            assert_eq!(replay.candidates(id).unwrap(), explicit.candidates(id));
+        }
+        assert_eq!(
+            solve_replay_exact(&replay, 1, 100).unwrap(),
+            solve_exact(&explicit, 1, 100)
+        );
+
+        for observed in explicit.observed_moves() {
+            let expected = explicit.apply(observed).unwrap();
+            let actual = replay.apply(observed).unwrap().unwrap();
+            assert_eq!(actual.world_count(), expected.world_count(), "{observed:?}");
+            assert_eq!(actual.turn(), expected.turn(), "{observed:?}");
+            assert_eq!(actual.is_proven_mate().unwrap(), expected.is_proven_mate());
+            for id in [VariableId(1), VariableId(2)] {
+                assert_eq!(actual.candidates(id).unwrap(), expected.candidates(id));
+            }
+        }
+    }
+}
+
+#[test]
+fn replay_backend_matches_free_white_help_selfmate() {
+    let problem = VariableProblem {
+        base_sfen: "9/9/9/9/7l1/9/8k/9/7SK w G 1".to_string(),
+        variables: vec![],
+        rule: MateRule::HelpSelfmate,
+    };
+    let explicit = problem.clone().enumerate_explicit().unwrap();
+    let replay = problem.enumerate_replay().unwrap();
+
+    assert_eq!(replay.observed_moves().unwrap(), explicit.observed_moves());
+    assert_eq!(
+        solve_replay_exact(&replay, 4, 100).unwrap(),
+        solve_exact(&explicit, 4, 100)
     );
 }

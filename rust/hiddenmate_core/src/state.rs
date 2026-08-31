@@ -1,4 +1,9 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::{Arc, OnceLock},
+};
+
+use anyhow::{bail, Result};
 
 use fmrs_core::{
     piece::{Color, Kind},
@@ -8,7 +13,10 @@ use fmrs_core::{
     },
 };
 
-use crate::{ConcreteWorld, HandVariableMode, MateRule, ObservedMove, VariableId};
+use crate::{
+    kind_set::KindSet, problem::for_each_initial_world, ConcreteWorld, HandVariableMode, MateRule,
+    ObservedMove, VariableId, VariableProblem,
+};
 
 /// これまでの観測と矛盾しない具体世界の集合。
 #[derive(Clone, Debug)]
@@ -70,15 +78,15 @@ impl HiddenState {
             .flat_map(|world| world.variables().map(|piece| piece.id))
             .collect();
         for id in ids {
-            let candidates: BTreeSet<_> = self
-                .worlds
-                .iter()
-                .filter_map(|world| world.variable(id).map(|piece| piece.kind))
-                .collect();
+            let candidates = KindSet::from_iter(
+                self.worlds
+                    .iter()
+                    .filter_map(|world| world.variable(id).map(|piece| piece.kind)),
+            );
             if candidates.len() != 1 {
                 continue;
             }
-            let kind = *candidates.iter().next().expect("候補が一種類ある");
+            let kind = candidates.iter().next().expect("候補が一種類ある");
             self.resolved.insert(id, kind);
             for world in &mut self.worlds {
                 world.forget_variable(id);
@@ -110,10 +118,12 @@ impl HiddenState {
         if let Some(&kind) = self.resolved.get(&id) {
             return [kind].into_iter().collect();
         }
-        self.worlds
-            .iter()
-            .filter_map(|world| world.variable(id).map(|piece| piece.kind))
-            .collect()
+        KindSet::from_iter(
+            self.worlds
+                .iter()
+                .filter_map(|world| world.variable(id).map(|piece| piece.kind)),
+        )
+        .to_btree_set()
     }
 
     pub fn resolved_kind(&self, id: VariableId) -> Option<Kind> {
@@ -191,6 +201,225 @@ impl HiddenState {
         ids.into_iter()
             .map(|id| (id, self.candidates(id)))
             .collect()
+    }
+}
+
+/// 具体世界を永続保持せず、問題と観測履歴から必要時に候補世界を再生する状態。
+#[derive(Clone, Debug)]
+pub struct ReplayHiddenState {
+    problem: Arc<VariableProblem>,
+    history: Vec<ObservedMove>,
+    /// 初形、および各観測着手後に新たに確定した覆面駒。
+    resolved_steps: Vec<BTreeMap<VariableId, Kind>>,
+    resolved: BTreeMap<VariableId, Kind>,
+    world_count: usize,
+    initial_turn: Color,
+    free_white_move: bool,
+    rule: MateRule,
+    hand_variable_mode: HandVariableMode,
+    observed_moves_cache: Arc<OnceLock<Vec<ObservedMove>>>,
+    mate_cache: Arc<OnceLock<bool>>,
+}
+
+impl ReplayHiddenState {
+    pub(crate) fn new(
+        problem: VariableProblem,
+        hand_variable_mode: HandVariableMode,
+    ) -> Result<Self> {
+        let mut world_count = 0usize;
+        let mut candidates = BTreeMap::<VariableId, KindSet>::new();
+        let mut initial_turn = None;
+        for_each_initial_world(&problem, &mut |world| {
+            world_count += 1;
+            initial_turn.get_or_insert(world.position().turn());
+            extend_candidate_sets(&mut candidates, &world);
+            Ok(())
+        })?;
+        if world_count == 0 {
+            bail!("初形の合法性と矛盾しない覆面駒の割当がありません");
+        }
+        let initial_resolved = uniquely_resolved(&candidates);
+        let initial_turn = initial_turn.expect("候補世界が存在する");
+        Ok(Self {
+            problem: Arc::new(problem.clone()),
+            history: Vec::new(),
+            resolved_steps: vec![initial_resolved.clone()],
+            resolved: initial_resolved,
+            world_count,
+            initial_turn,
+            free_white_move: initial_turn.is_white(),
+            rule: problem.rule,
+            hand_variable_mode,
+            observed_moves_cache: Arc::new(OnceLock::new()),
+            mate_cache: Arc::new(OnceLock::new()),
+        })
+    }
+
+    pub fn world_count(&self) -> usize {
+        self.world_count
+    }
+
+    pub fn turn(&self) -> Color {
+        if self.history.len() % 2 == 0 {
+            self.initial_turn
+        } else {
+            self.initial_turn.opposite()
+        }
+    }
+
+    pub fn rule(&self) -> MateRule {
+        self.rule
+    }
+
+    pub fn hand_variable_mode(&self) -> HandVariableMode {
+        self.hand_variable_mode
+    }
+
+    pub fn resolved_kind(&self, id: VariableId) -> Option<Kind> {
+        self.resolved.get(&id).copied()
+    }
+
+    pub fn candidates(&self, id: VariableId) -> Result<BTreeSet<Kind>> {
+        if let Some(&kind) = self.resolved.get(&id) {
+            return Ok([kind].into_iter().collect());
+        }
+        let mut result = KindSet::default();
+        self.for_each_world(&mut |world| {
+            if let Some(piece) = world.variable(id) {
+                result.insert(piece.kind);
+            }
+            Ok(())
+        })?;
+        Ok(result.to_btree_set())
+    }
+
+    pub fn observed_moves(&self) -> Result<Vec<ObservedMove>> {
+        if let Some(cached) = self.observed_moves_cache.get() {
+            return Ok(cached.clone());
+        }
+        let mut result = BTreeSet::new();
+        let free_white_move = self.history.is_empty() && self.free_white_move;
+        self.for_each_world(&mut |world| {
+            for (observed, _, _) in concrete_moves(&world, free_white_move, self.hand_variable_mode)
+            {
+                result.insert(observed);
+            }
+            Ok(())
+        })?;
+        let result = result.into_iter().collect::<Vec<_>>();
+        let _ = self.observed_moves_cache.set(result.clone());
+        Ok(result)
+    }
+
+    pub fn apply(&self, observed: ObservedMove) -> Result<Option<Self>> {
+        let mut world_count = 0usize;
+        let mut candidates = BTreeMap::<VariableId, KindSet>::new();
+        let free_white_move = self.history.is_empty() && self.free_white_move;
+        self.for_each_world(&mut |world| {
+            for (candidate, movement, selected_variable) in
+                concrete_moves(&world, free_white_move, self.hand_variable_mode)
+            {
+                if candidate == observed {
+                    let next = world.apply(observed, movement, selected_variable);
+                    world_count += 1;
+                    extend_candidate_sets(&mut candidates, &next);
+                }
+            }
+            Ok(())
+        })?;
+        if world_count == 0 {
+            return Ok(None);
+        }
+
+        let newly_resolved = uniquely_resolved(&candidates);
+        let mut next = self.clone();
+        next.history.push(observed);
+        next.resolved_steps.push(newly_resolved.clone());
+        next.resolved.extend(newly_resolved);
+        next.world_count = world_count;
+        next.observed_moves_cache = Arc::new(OnceLock::new());
+        next.mate_cache = Arc::new(OnceLock::new());
+        Ok(Some(next))
+    }
+
+    pub fn is_proven_mate(&self) -> Result<bool> {
+        if let Some(&cached) = self.mate_cache.get() {
+            return Ok(cached);
+        }
+        if self.turn() != self.rule.terminal_turn() {
+            let _ = self.mate_cache.set(false);
+            return Ok(false);
+        }
+        let mut all_mated = true;
+        self.for_each_world(&mut |world| {
+            let mut position = world.position().clone();
+            let mated = match self.rule {
+                MateRule::Helpmate => {
+                    let mut movements = Vec::new();
+                    matches!(
+                        advance_aux(&mut position, &AdvanceOptions::default(), &mut movements),
+                        Ok(true)
+                    ) && movements.is_empty()
+                }
+                MateRule::HelpSelfmate => {
+                    fmrs_core::solve::help_selfmate::is_help_selfmate(&mut position)
+                }
+            };
+            all_mated &= mated;
+            Ok(())
+        })?;
+        let _ = self.mate_cache.set(all_mated);
+        Ok(all_mated)
+    }
+
+    fn for_each_world(&self, visitor: &mut impl FnMut(ConcreteWorld) -> Result<()>) -> Result<()> {
+        for_each_initial_world(&self.problem, &mut |mut initial| {
+            forget_resolved(&mut initial, &self.resolved_steps[0]);
+            let mut frontier = vec![initial];
+            for (step, observed) in self.history.iter().copied().enumerate() {
+                let mut next_frontier = Vec::new();
+                for world in frontier {
+                    let free_white_move = step == 0 && self.free_white_move;
+                    for (candidate, movement, selected_variable) in
+                        concrete_moves(&world, free_white_move, self.hand_variable_mode)
+                    {
+                        if candidate == observed {
+                            let mut next = world.apply(observed, movement, selected_variable);
+                            forget_resolved(&mut next, &self.resolved_steps[step + 1]);
+                            next_frontier.push(next);
+                        }
+                    }
+                }
+                frontier = next_frontier;
+                if frontier.is_empty() {
+                    break;
+                }
+            }
+            for world in frontier {
+                visitor(world)?;
+            }
+            Ok(())
+        })
+    }
+}
+
+fn extend_candidate_sets(candidates: &mut BTreeMap<VariableId, KindSet>, world: &ConcreteWorld) {
+    for piece in world.variables() {
+        candidates.entry(piece.id).or_default().insert(piece.kind);
+    }
+}
+
+fn uniquely_resolved(candidates: &BTreeMap<VariableId, KindSet>) -> BTreeMap<VariableId, Kind> {
+    candidates
+        .iter()
+        .filter(|(_, kinds)| kinds.len() == 1)
+        .map(|(&id, kinds)| (id, kinds.iter().next().expect("候補が一種類ある")))
+        .collect()
+}
+
+fn forget_resolved(world: &mut ConcreteWorld, resolved: &BTreeMap<VariableId, Kind>) {
+    for id in resolved.keys().copied() {
+        world.forget_variable(id);
     }
 }
 

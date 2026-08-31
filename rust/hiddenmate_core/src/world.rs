@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use fmrs_core::{
     piece::{Color, Kind},
@@ -29,14 +29,14 @@ pub struct VariablePiece {
 /// 覆面駒の正体をすべて確定させた一つの通常局面。
 #[derive(Clone, Debug)]
 pub struct ConcreteWorld {
-    position: PositionAux,
+    position: Arc<PositionAux>,
     variables: BTreeMap<VariableId, VariablePiece>,
 }
 
 impl ConcreteWorld {
     pub(crate) fn new(position: PositionAux, variables: Vec<VariablePiece>) -> Self {
         Self {
-            position,
+            position: Arc::new(position),
             variables: variables
                 .into_iter()
                 .map(|piece| (piece.id, piece))
@@ -45,7 +45,7 @@ impl ConcreteWorld {
     }
 
     pub fn position(&self) -> &PositionAux {
-        &self.position
+        self.position.as_ref()
     }
 
     pub fn variable(&self, id: VariableId) -> Option<&VariablePiece> {
@@ -157,7 +157,7 @@ impl ConcreteWorld {
         };
 
         let mut next = self.clone();
-        next.position.do_move(&movement);
+        Arc::make_mut(&mut next.position).do_move(&movement);
 
         if let Some(id) = captured_variable {
             let captured = next
@@ -272,7 +272,7 @@ mod tests {
         assert_eq!(piece.location, VariableLocation::Hand(Color::BLACK));
 
         let mut black_to_move = captured;
-        black_to_move.position.set_turn(Color::BLACK);
+        Arc::make_mut(&mut black_to_move.position).set_turn(Color::BLACK);
         let dropped = black_to_move.apply(
             ObservedMove::Drop {
                 identity: DropIdentity::Variable(VariableId(3)),
