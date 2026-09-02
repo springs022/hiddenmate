@@ -2,10 +2,14 @@ mod backward_search;
 mod solver;
 mod utils;
 
+use std::collections::BTreeMap;
+
 use fmrs_core::piece::Kind;
 use hiddenmate_core::{
     format_known_invisible_solution_japanese, format_solution_japanese, solve_exact,
-    solve_known_invisible_exact, KnownInvisibleDocument, ProblemDocument,
+    solve_exact_profiled, solve_known_invisible_exact, solve_known_invisible_exact_profiled,
+    solve_replay_exact_profiled, solve_replay_known_invisible_exact_profiled, HiddenState,
+    KnownInvisibleDocument, ObservedMove, ProblemDocument, Solution,
 };
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
@@ -56,9 +60,10 @@ struct VariableSolveResponse {
     world_count: usize,
     candidates: Vec<VariableCandidates>,
     solutions: Vec<Vec<String>>,
+    solution_candidates: Vec<Vec<Vec<VariableCandidates>>>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct VariableCandidates {
     id: u16,
     kinds: Vec<&'static str>,
@@ -76,15 +81,10 @@ fn solve_variable_problem_json(json: &str, max_solutions: usize) -> anyhow::Resu
     let plies = document.plies;
     let (problem, hand_variable_mode) = document.into_problem_with_hand_variable_mode()?;
     let state = problem.enumerate_with_hand_variable_mode(hand_variable_mode)?;
-    let candidates = state
-        .all_candidates()
-        .into_iter()
-        .map(|(id, kinds)| VariableCandidates {
-            id: id.0,
-            kinds: kinds.into_iter().map(kind_code).collect(),
-        })
-        .collect();
-    let solutions = solve_exact(&state, plies, max_solutions)
+    let candidates = variable_candidates(&state);
+    let raw_solutions = solve_exact(&state, plies, max_solutions);
+    let solution_candidates = collect_solution_candidates(&state, &raw_solutions)?;
+    let solutions = raw_solutions
         .iter()
         .map(|solution| format_solution_japanese(&state, solution))
         .collect();
@@ -92,8 +92,64 @@ fn solve_variable_problem_json(json: &str, max_solutions: usize) -> anyhow::Resu
         world_count: state.world_count(),
         candidates,
         solutions,
+        solution_candidates,
     };
     Ok(serde_json::to_string(&response)?)
+}
+
+fn variable_candidates(state: &HiddenState) -> Vec<VariableCandidates> {
+    state
+        .all_candidates()
+        .into_iter()
+        .map(|(id, kinds)| VariableCandidates {
+            id: id.0,
+            kinds: kinds.into_iter().map(kind_code).collect(),
+        })
+        .collect()
+}
+
+fn collect_solution_candidates(
+    initial: &HiddenState,
+    solutions: &[Solution],
+) -> anyhow::Result<Vec<Vec<Vec<VariableCandidates>>>> {
+    let mut result = solutions
+        .iter()
+        .map(|solution| Vec::with_capacity(solution.len()))
+        .collect::<Vec<_>>();
+    let solution_indices = (0..solutions.len()).collect::<Vec<_>>();
+    collect_solution_candidates_inner(initial, solutions, &solution_indices, 0, &mut result)?;
+    Ok(result)
+}
+
+fn collect_solution_candidates_inner(
+    state: &HiddenState,
+    solutions: &[Solution],
+    solution_indices: &[usize],
+    depth: usize,
+    result: &mut [Vec<Vec<VariableCandidates>>],
+) -> anyhow::Result<()> {
+    let mut groups = BTreeMap::<ObservedMove, Vec<usize>>::new();
+    for &solution_index in solution_indices {
+        if let Some(&observed) = solutions[solution_index].get(depth) {
+            groups.entry(observed).or_default().push(solution_index);
+        }
+    }
+
+    for (observed, group) in groups {
+        let next = state.apply(observed).ok_or_else(|| {
+            anyhow::anyhow!(
+                "解{}の{}手目を候補世界へ適用できません",
+                group[0] + 1,
+                depth + 1
+            )
+        })?;
+        let candidates = variable_candidates(&next);
+        for &solution_index in &group {
+            result[solution_index].push(candidates.clone());
+        }
+        collect_solution_candidates_inner(&next, solutions, &group, depth + 1, result)?;
+    }
+    Ok(())
 }
 
 fn kind_code(kind: Kind) -> &'static str {
@@ -127,6 +183,163 @@ struct KnownInvisibleSolveResponse {
 pub fn solve_known_invisible_problem(json: &str, max_solutions: u32) -> Result<String, JsValue> {
     solve_known_invisible_problem_json(json, max_solutions as usize)
         .map_err(|error| JsValue::from_str(&format!("{error:#}")))
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackendBenchmarkResponse {
+    problem_type: &'static str,
+    backend: String,
+    world_count: usize,
+    solution_count: usize,
+    init_millis: f64,
+    solve_millis: f64,
+    visited_states: usize,
+    transitions: usize,
+    memory_before_bytes: usize,
+    memory_after_init_bytes: usize,
+    memory_after_solve_bytes: usize,
+}
+
+/// 候補世界バックエンドを新しいWorker内で比較するための実験用測定口。
+#[wasm_bindgen]
+pub fn benchmark_candidate_backend(
+    json: &str,
+    backend: &str,
+    max_solutions: u32,
+) -> Result<String, JsValue> {
+    benchmark_candidate_backend_json(json, backend, max_solutions as usize)
+        .map_err(|error| JsValue::from_str(&format!("{error:#}")))
+}
+
+fn benchmark_candidate_backend_json(
+    json: &str,
+    backend: &str,
+    max_solutions: usize,
+) -> anyhow::Result<String> {
+    let memory_before_bytes = wasm_memory_bytes();
+    let value: serde_json::Value = serde_json::from_str(json)?;
+    let response = if value.get("invisibles").is_some() {
+        let document = KnownInvisibleDocument::from_json(json)?;
+        let (problem, plies) = document.into_problem()?;
+        let init_started = benchmark_now_millis();
+        match backend {
+            "explicit" => {
+                let state = problem.enumerate_explicit()?;
+                let init_millis = benchmark_now_millis() - init_started;
+                let memory_after_init_bytes = wasm_memory_bytes();
+                let (solutions, metrics) =
+                    solve_known_invisible_exact_profiled(&state, plies, max_solutions)?;
+                BackendBenchmarkResponse {
+                    problem_type: "knownInvisible",
+                    backend: backend.to_string(),
+                    world_count: state.world_count(),
+                    solution_count: solutions.len(),
+                    init_millis,
+                    solve_millis: metrics.total_elapsed.as_secs_f64() * 1000.0,
+                    visited_states: metrics.visited_state_count,
+                    transitions: metrics.generated_transition_count,
+                    memory_before_bytes,
+                    memory_after_init_bytes,
+                    memory_after_solve_bytes: wasm_memory_bytes(),
+                }
+            }
+            "replay" => {
+                let state = problem.enumerate_replay()?;
+                let init_millis = benchmark_now_millis() - init_started;
+                let memory_after_init_bytes = wasm_memory_bytes();
+                let (solutions, metrics) =
+                    solve_replay_known_invisible_exact_profiled(&state, plies, max_solutions)?;
+                BackendBenchmarkResponse {
+                    problem_type: "knownInvisible",
+                    backend: backend.to_string(),
+                    world_count: state.world_count(),
+                    solution_count: solutions.len(),
+                    init_millis,
+                    solve_millis: metrics.total_elapsed.as_secs_f64() * 1000.0,
+                    visited_states: metrics.visited_state_count,
+                    transitions: metrics.generated_transition_count,
+                    memory_before_bytes,
+                    memory_after_init_bytes,
+                    memory_after_solve_bytes: wasm_memory_bytes(),
+                }
+            }
+            _ => anyhow::bail!("未知のバックエンドです: {backend}"),
+        }
+    } else {
+        let document = ProblemDocument::from_json(json)?;
+        let plies = document.plies;
+        let (problem, hand_variable_mode) = document.into_problem_with_hand_variable_mode()?;
+        let init_started = benchmark_now_millis();
+        match backend {
+            "explicit" => {
+                let state =
+                    problem.enumerate_explicit_with_hand_variable_mode(hand_variable_mode)?;
+                let init_millis = benchmark_now_millis() - init_started;
+                let memory_after_init_bytes = wasm_memory_bytes();
+                let (solutions, metrics) = solve_exact_profiled(&state, plies, max_solutions);
+                BackendBenchmarkResponse {
+                    problem_type: "variable",
+                    backend: backend.to_string(),
+                    world_count: state.world_count(),
+                    solution_count: solutions.len(),
+                    init_millis,
+                    solve_millis: metrics.total_elapsed.as_secs_f64() * 1000.0,
+                    visited_states: metrics.visited_state_count,
+                    transitions: metrics.generated_transition_count,
+                    memory_before_bytes,
+                    memory_after_init_bytes,
+                    memory_after_solve_bytes: wasm_memory_bytes(),
+                }
+            }
+            "replay" => {
+                let state = problem.enumerate_replay_with_hand_variable_mode(hand_variable_mode)?;
+                let init_millis = benchmark_now_millis() - init_started;
+                let memory_after_init_bytes = wasm_memory_bytes();
+                let (solutions, metrics) =
+                    solve_replay_exact_profiled(&state, plies, max_solutions)?;
+                BackendBenchmarkResponse {
+                    problem_type: "variable",
+                    backend: backend.to_string(),
+                    world_count: state.world_count(),
+                    solution_count: solutions.len(),
+                    init_millis,
+                    solve_millis: metrics.total_elapsed.as_secs_f64() * 1000.0,
+                    visited_states: metrics.visited_state_count,
+                    transitions: metrics.generated_transition_count,
+                    memory_before_bytes,
+                    memory_after_init_bytes,
+                    memory_after_solve_bytes: wasm_memory_bytes(),
+                }
+            }
+            _ => anyhow::bail!("未知のバックエンドです: {backend}"),
+        }
+    };
+    Ok(serde_json::to_string(&response)?)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn wasm_memory_bytes() -> usize {
+    core::arch::wasm32::memory_size::<0>() * 64 * 1024
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn wasm_memory_bytes() -> usize {
+    0
+}
+
+#[cfg(target_arch = "wasm32")]
+fn benchmark_now_millis() -> f64 {
+    js_sys::Date::now()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn benchmark_now_millis() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("現在時刻がUNIX epoch以後")
+        .as_secs_f64()
+        * 1000.0
 }
 
 fn solve_known_invisible_problem_json(json: &str, max_solutions: usize) -> anyhow::Result<String> {
@@ -167,6 +380,11 @@ mod hiddenmate_tests {
             serde_json::json!(["R", "+R"])
         );
         assert_eq!(value["solutions"][0][0], "84▲(64)");
+        assert_eq!(
+            value["solutionCandidates"][0].as_array().unwrap().len(),
+            value["solutions"][0].as_array().unwrap().len()
+        );
+        assert_eq!(value["solutionCandidates"][0][0][0]["id"], 1);
     }
 
     #[test]

@@ -2,14 +2,18 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import App from "./App";
+import BackendBenchmarkPage from "./ui/component/BackendBenchmarkPage";
 import reportWebVitals from "./reportWebVitals";
 
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement,
 );
+const benchmarkMode = new URLSearchParams(location.search).has(
+  "backendBenchmark",
+);
 root.render(
   <React.StrictMode>
-    <App />
+    {benchmarkMode ? <BackendBenchmarkPage /> : <App />}
   </React.StrictMode>,
 );
 

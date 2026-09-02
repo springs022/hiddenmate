@@ -1,7 +1,6 @@
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     sync::{Arc, OnceLock},
-    time::Instant,
 };
 
 use anyhow::{bail, Context, Result};
@@ -16,10 +15,14 @@ use fmrs_core::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{DropIdentity, EnumerationMetrics, MateRule, MoveIdentity, ObservedMove, SolveMetrics};
+use crate::{
+    clock::Clock, world_id_set::WorldIdSet, DropIdentity, EnumerationMetrics, MateRule,
+    MoveIdentity, ObservedMove, SolveMetrics,
+};
 
 const MAX_KNOWN_INVISIBLES: usize = 2;
 const MAX_WORLDS: usize = 20_000;
+const REPLAY_CHECKPOINT_INTERVAL: usize = 2;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -325,7 +328,7 @@ impl KnownInvisibleProblem {
     }
 
     pub fn enumerate_profiled(self) -> Result<(KnownInvisibleState, EnumerationMetrics)> {
-        let started = Instant::now();
+        let started = Clock::now();
         let state = self.enumerate_explicit()?;
         let metrics = EnumerationMetrics {
             world_count: state.world_count(),
@@ -342,7 +345,7 @@ impl KnownInvisibleProblem {
     pub fn enumerate_replay_profiled(
         self,
     ) -> Result<(ReplayKnownInvisibleState, EnumerationMetrics)> {
-        let started = Instant::now();
+        let started = Clock::now();
         let state = ReplayKnownInvisibleState::new(self)?;
         let metrics = EnumerationMetrics {
             world_count: state.world_count(),
@@ -643,7 +646,7 @@ impl KnownInvisibleState {
 /// 候補世界を保持せず、初形生成器と観測履歴から必要時に再生する状態。
 #[derive(Clone, Debug)]
 pub struct ReplayKnownInvisibleState {
-    problem: Arc<KnownInvisibleProblem>,
+    context: Arc<ReplayKnownInvisibleContext>,
     history: Vec<KnownInvisibleObservedMove>,
     /// 初形、および各観測着手後に可視化された透明駒。
     resolved_steps: Vec<Vec<InvisiblePiece>>,
@@ -651,44 +654,86 @@ pub struct ReplayKnownInvisibleState {
     initial_turn: Color,
     free_white_move: bool,
     rule: MateRule,
-    observed_moves_cache: Arc<OnceLock<Vec<KnownInvisibleObservedMove>>>,
+    active_initials: WorldIdSet,
+    checkpoint: KnownInvisibleCheckpoint,
+    transition_cache: Arc<OnceLock<BTreeMap<KnownInvisibleObservedMove, KnownInvisibleTransition>>>,
     mate_cache: Arc<OnceLock<bool>>,
+}
+
+#[derive(Debug)]
+struct ReplayKnownInvisibleContext {
+    initial_worlds: Arc<Vec<SeededInvisibleWorld>>,
+}
+
+#[derive(Clone, Debug)]
+struct SeededInvisibleWorld {
+    initial_id: usize,
+    world: InvisibleWorld,
+}
+
+#[derive(Clone, Debug)]
+struct KnownInvisibleCheckpoint {
+    depth: usize,
+    worlds: Arc<Vec<SeededInvisibleWorld>>,
+}
+
+#[derive(Clone, Debug)]
+struct KnownInvisibleTransition {
+    worlds: Arc<Vec<SeededInvisibleWorld>>,
+    resolved: Vec<InvisiblePiece>,
+    active_initials: WorldIdSet,
 }
 
 impl ReplayKnownInvisibleState {
     fn new(problem: KnownInvisibleProblem) -> Result<Self> {
-        let mut common = None;
-        let mut generated = 0usize;
+        let mut raw_worlds = BTreeMap::new();
         let free_white_move = for_each_initial_world(&problem, &mut |world| {
-            generated += 1;
-            retain_common_invisibles(&mut common, &world.invisibles);
-            Ok(())
-        })?;
-        if generated == 0 {
-            bail!("初形の合法性と矛盾しない透明駒の配置がありません");
-        }
-        let resolved = common.unwrap_or_default();
-        let mut keys = BTreeSet::new();
-        for_each_initial_world(&problem, &mut |mut world| {
-            remove_resolved_invisibles(&mut world, &resolved);
-            keys.insert(world.key());
-            if keys.len() > MAX_WORLDS {
+            raw_worlds.entry(world.key()).or_insert(world);
+            if raw_worlds.len() > MAX_WORLDS {
                 bail!("候補世界が上限の{MAX_WORLDS}件を超えました");
             }
             Ok(())
         })?;
+        if raw_worlds.is_empty() {
+            bail!("初形の合法性と矛盾しない透明駒の配置がありません");
+        }
+        let mut common = None;
+        for world in raw_worlds.values() {
+            retain_common_invisibles(&mut common, &world.invisibles);
+        }
+        let resolved = common.unwrap_or_default();
+        let mut normalized = BTreeMap::new();
+        for (_, mut world) in raw_worlds {
+            remove_resolved_invisibles(&mut world, &resolved);
+            normalized.entry(world.key()).or_insert(world);
+        }
+        let initial_worlds = Arc::new(
+            normalized
+                .into_values()
+                .enumerate()
+                .map(|(initial_id, world)| SeededInvisibleWorld { initial_id, world })
+                .collect::<Vec<_>>(),
+        );
+        let world_count = initial_worlds.len();
         let initial_turn = PositionAux::from_sfen(&problem.base_sfen)
             .with_context(|| format!("SFENを解釈できません: {}", problem.base_sfen))?
             .turn();
         Ok(Self {
-            problem: Arc::new(problem.clone()),
+            context: Arc::new(ReplayKnownInvisibleContext {
+                initial_worlds: initial_worlds.clone(),
+            }),
             history: Vec::new(),
             resolved_steps: vec![resolved],
-            world_count: keys.len(),
+            world_count,
             initial_turn,
             free_white_move,
             rule: problem.rule,
-            observed_moves_cache: Arc::new(OnceLock::new()),
+            active_initials: WorldIdSet::full(world_count),
+            checkpoint: KnownInvisibleCheckpoint {
+                depth: 0,
+                worlds: initial_worlds,
+            },
+            transition_cache: Arc::new(OnceLock::new()),
             mate_cache: Arc::new(OnceLock::new()),
         })
     }
@@ -706,60 +751,26 @@ impl ReplayKnownInvisibleState {
     }
 
     pub fn observed_moves(&self) -> Result<Vec<KnownInvisibleObservedMove>> {
-        if let Some(cached) = self.observed_moves_cache.get() {
-            return Ok(cached.clone());
-        }
-        let mut result = BTreeSet::new();
-        let free_white_move = self.history.is_empty() && self.free_white_move;
-        self.for_each_world(&mut |world| {
-            for movement in concrete_movements(&world, free_white_move) {
-                for (observed, _) in world.transition_variants(movement) {
-                    result.insert(observed);
-                }
-            }
-            Ok(())
-        })?;
-        let result = result.into_iter().collect::<Vec<_>>();
-        let _ = self.observed_moves_cache.set(result.clone());
-        Ok(result)
+        Ok(self.transitions()?.keys().copied().collect())
     }
 
     pub fn apply(&self, observed: KnownInvisibleObservedMove) -> Result<Option<Self>> {
-        let mut next_worlds = BTreeMap::new();
-        let free_white_move = self.history.is_empty() && self.free_white_move;
-        self.for_each_world(&mut |world| {
-            for movement in concrete_movements(&world, free_white_move) {
-                for (candidate, next) in world.transition_variants(movement) {
-                    if candidate == observed {
-                        next_worlds.entry(next.key()).or_insert(next);
-                    }
-                }
-            }
-            if next_worlds.len() > MAX_WORLDS {
-                bail!("着手後の候補世界が上限の{MAX_WORLDS}件を超えました");
-            }
-            Ok(())
-        })?;
-        if next_worlds.is_empty() {
+        let Some(transition) = self.transitions()?.get(&observed).cloned() else {
             return Ok(None);
-        }
-
-        let mut common = None;
-        for world in next_worlds.values() {
-            retain_common_invisibles(&mut common, &world.invisibles);
-        }
-        let resolved = common.unwrap_or_default();
-        let mut normalized = BTreeMap::new();
-        for (_, mut world) in next_worlds {
-            remove_resolved_invisibles(&mut world, &resolved);
-            normalized.entry(world.key()).or_insert(world);
-        }
+        };
 
         let mut next = self.clone();
         next.history.push(observed);
-        next.resolved_steps.push(resolved);
-        next.world_count = normalized.len();
-        next.observed_moves_cache = Arc::new(OnceLock::new());
+        next.resolved_steps.push(transition.resolved);
+        next.world_count = transition.worlds.len();
+        next.active_initials = transition.active_initials;
+        if next.history.len() % REPLAY_CHECKPOINT_INTERVAL == 0 {
+            next.checkpoint = KnownInvisibleCheckpoint {
+                depth: next.history.len(),
+                worlds: transition.worlds,
+            };
+        }
+        next.transition_cache = Arc::new(OnceLock::new());
         next.mate_cache = Arc::new(OnceLock::new());
         Ok(Some(next))
     }
@@ -773,7 +784,7 @@ impl ReplayKnownInvisibleState {
             return Ok(false);
         }
         let mut all_mated = true;
-        self.for_each_world(&mut |world| {
+        self.for_each_world(&mut |_, world| {
             let mut position = world.position.as_ref().clone();
             let mated = match self.rule {
                 MateRule::Helpmate => {
@@ -794,11 +805,91 @@ impl ReplayKnownInvisibleState {
         Ok(all_mated)
     }
 
-    fn for_each_world(&self, visitor: &mut impl FnMut(InvisibleWorld) -> Result<()>) -> Result<()> {
-        for_each_initial_world(&self.problem, &mut |mut initial| {
-            remove_resolved_invisibles(&mut initial, &self.resolved_steps[0]);
-            let mut frontier = vec![initial];
-            for (step, observed) in self.history.iter().copied().enumerate() {
+    fn transitions(
+        &self,
+    ) -> Result<&BTreeMap<KnownInvisibleObservedMove, KnownInvisibleTransition>> {
+        if self.transition_cache.get().is_none() {
+            let transitions = self.build_transitions()?;
+            let _ = self.transition_cache.set(transitions);
+        }
+        Ok(self
+            .transition_cache
+            .get()
+            .expect("遷移キャッシュを設定済み"))
+    }
+
+    fn build_transitions(
+        &self,
+    ) -> Result<BTreeMap<KnownInvisibleObservedMove, KnownInvisibleTransition>> {
+        let mut grouped =
+            BTreeMap::<KnownInvisibleObservedMove, BTreeMap<String, SeededInvisibleWorld>>::new();
+        let free_white_move = self.history.is_empty() && self.free_white_move;
+        self.for_each_world(&mut |initial_id, world| {
+            for movement in concrete_movements(&world, free_white_move) {
+                for (observed, next) in world.transition_variants(movement) {
+                    grouped
+                        .entry(observed)
+                        .or_default()
+                        .entry(next.key())
+                        .or_insert(SeededInvisibleWorld {
+                            initial_id,
+                            world: next,
+                        });
+                }
+            }
+            Ok(())
+        })?;
+
+        grouped
+            .into_iter()
+            .map(|(observed, worlds)| {
+                if worlds.len() > MAX_WORLDS {
+                    bail!("着手後の候補世界が上限の{MAX_WORLDS}件を超えました");
+                }
+                let mut common = None;
+                for seeded in worlds.values() {
+                    retain_common_invisibles(&mut common, &seeded.world.invisibles);
+                }
+                let resolved = common.unwrap_or_default();
+                let mut normalized = BTreeMap::new();
+                for (_, mut seeded) in worlds {
+                    remove_resolved_invisibles(&mut seeded.world, &resolved);
+                    normalized.entry(seeded.world.key()).or_insert(seeded);
+                }
+                let worlds = normalized.into_values().collect::<Vec<_>>();
+                let mut active_initials =
+                    WorldIdSet::with_capacity(self.context.initial_worlds.len());
+                for seeded in &worlds {
+                    active_initials.insert(seeded.initial_id);
+                }
+                Ok((
+                    observed,
+                    KnownInvisibleTransition {
+                        worlds: Arc::new(worlds),
+                        resolved,
+                        active_initials,
+                    },
+                ))
+            })
+            .collect()
+    }
+
+    fn for_each_world(
+        &self,
+        visitor: &mut impl FnMut(usize, InvisibleWorld) -> Result<()>,
+    ) -> Result<()> {
+        for seeded in self.checkpoint.worlds.iter() {
+            if !self.active_initials.contains(seeded.initial_id) {
+                continue;
+            }
+            let mut frontier = vec![seeded.world.clone()];
+            for (step, observed) in self
+                .history
+                .iter()
+                .copied()
+                .enumerate()
+                .skip(self.checkpoint.depth)
+            {
                 let mut next_frontier = Vec::new();
                 for world in frontier {
                     let free_white_move = step == 0 && self.free_white_move;
@@ -820,10 +911,9 @@ impl ReplayKnownInvisibleState {
                 }
             }
             for world in frontier {
-                visitor(world)?;
+                visitor(seeded.initial_id, world)?;
             }
-            Ok(())
-        })?;
+        }
         Ok(())
     }
 }
@@ -903,7 +993,7 @@ pub fn solve_known_invisible_exact_profiled(
     plies: usize,
     max_solutions: usize,
 ) -> Result<(Vec<KnownInvisibleSolution>, SolveMetrics)> {
-    let started = Instant::now();
+    let started = Clock::now();
     let mut metrics = SolveMetrics::new(initial.world_count());
     let mut solutions = Vec::new();
     for depth in 0..=plies {
@@ -946,7 +1036,7 @@ pub fn solve_replay_known_invisible_exact_profiled(
     plies: usize,
     max_solutions: usize,
 ) -> Result<(Vec<KnownInvisibleSolution>, SolveMetrics)> {
-    let started = Instant::now();
+    let started = Clock::now();
     let mut metrics = SolveMetrics::new(initial.world_count());
     if max_solutions == 0 {
         metrics.total_elapsed = started.elapsed();
@@ -1001,11 +1091,11 @@ fn solve_replay_inner(
         return Ok(());
     }
 
-    let move_generation_started = Instant::now();
+    let move_generation_started = Clock::now();
     let observed_moves = state.observed_moves()?;
     metrics.move_generation_elapsed += move_generation_started.elapsed();
     for observed in observed_moves {
-        let transition_started = Instant::now();
+        let transition_started = Clock::now();
         let Some(next) = state.apply(observed)? else {
             continue;
         };
@@ -1049,7 +1139,7 @@ fn solve_inner(
     if state.is_proven_mate() {
         return Ok(());
     }
-    let transition_started = Instant::now();
+    let transition_started = Clock::now();
     let successors = state.successors()?;
     let transition_elapsed = transition_started.elapsed();
     metrics.move_generation_elapsed += transition_elapsed;
@@ -1213,6 +1303,8 @@ mod square_serde {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::*;
 
     #[test]

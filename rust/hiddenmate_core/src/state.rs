@@ -14,9 +14,11 @@ use fmrs_core::{
 };
 
 use crate::{
-    kind_set::KindSet, problem::for_each_initial_world, ConcreteWorld, HandVariableMode, MateRule,
-    ObservedMove, VariableId, VariableProblem,
+    kind_set::KindSet, problem::for_each_initial_world, world_id_set::WorldIdSet, ConcreteWorld,
+    HandVariableMode, MateRule, ObservedMove, VariableId, VariableProblem,
 };
+
+const REPLAY_CHECKPOINT_INTERVAL: usize = 2;
 
 /// これまでの観測と矛盾しない具体世界の集合。
 #[derive(Clone, Debug)]
@@ -207,7 +209,7 @@ impl HiddenState {
 /// 具体世界を永続保持せず、問題と観測履歴から必要時に候補世界を再生する状態。
 #[derive(Clone, Debug)]
 pub struct ReplayHiddenState {
-    problem: Arc<VariableProblem>,
+    context: Arc<ReplayHiddenContext>,
     history: Vec<ObservedMove>,
     /// 初形、および各観測着手後に新たに確定した覆面駒。
     resolved_steps: Vec<BTreeMap<VariableId, Kind>>,
@@ -217,8 +219,34 @@ pub struct ReplayHiddenState {
     free_white_move: bool,
     rule: MateRule,
     hand_variable_mode: HandVariableMode,
-    observed_moves_cache: Arc<OnceLock<Vec<ObservedMove>>>,
+    active_initials: WorldIdSet,
+    checkpoint: HiddenCheckpoint,
+    transition_cache: Arc<OnceLock<BTreeMap<ObservedMove, HiddenTransition>>>,
     mate_cache: Arc<OnceLock<bool>>,
+}
+
+#[derive(Debug)]
+struct ReplayHiddenContext {
+    initial_worlds: Arc<Vec<SeededConcreteWorld>>,
+}
+
+#[derive(Clone, Debug)]
+struct SeededConcreteWorld {
+    initial_id: usize,
+    world: ConcreteWorld,
+}
+
+#[derive(Clone, Debug)]
+struct HiddenCheckpoint {
+    depth: usize,
+    worlds: Arc<Vec<SeededConcreteWorld>>,
+}
+
+#[derive(Clone, Debug)]
+struct HiddenTransition {
+    worlds: Arc<Vec<SeededConcreteWorld>>,
+    newly_resolved: BTreeMap<VariableId, Kind>,
+    active_initials: WorldIdSet,
 }
 
 impl ReplayHiddenState {
@@ -226,22 +254,35 @@ impl ReplayHiddenState {
         problem: VariableProblem,
         hand_variable_mode: HandVariableMode,
     ) -> Result<Self> {
-        let mut world_count = 0usize;
+        let mut initial_worlds = Vec::new();
         let mut candidates = BTreeMap::<VariableId, KindSet>::new();
         let mut initial_turn = None;
         for_each_initial_world(&problem, &mut |world| {
-            world_count += 1;
             initial_turn.get_or_insert(world.position().turn());
             extend_candidate_sets(&mut candidates, &world);
+            initial_worlds.push(world);
             Ok(())
         })?;
-        if world_count == 0 {
+        if initial_worlds.is_empty() {
             bail!("初形の合法性と矛盾しない覆面駒の割当がありません");
         }
         let initial_resolved = uniquely_resolved(&candidates);
+        for world in &mut initial_worlds {
+            forget_resolved(world, &initial_resolved);
+        }
+        let initial_worlds = Arc::new(
+            initial_worlds
+                .into_iter()
+                .enumerate()
+                .map(|(initial_id, world)| SeededConcreteWorld { initial_id, world })
+                .collect::<Vec<_>>(),
+        );
+        let world_count = initial_worlds.len();
         let initial_turn = initial_turn.expect("候補世界が存在する");
         Ok(Self {
-            problem: Arc::new(problem.clone()),
+            context: Arc::new(ReplayHiddenContext {
+                initial_worlds: initial_worlds.clone(),
+            }),
             history: Vec::new(),
             resolved_steps: vec![initial_resolved.clone()],
             resolved: initial_resolved,
@@ -250,7 +291,12 @@ impl ReplayHiddenState {
             free_white_move: initial_turn.is_white(),
             rule: problem.rule,
             hand_variable_mode,
-            observed_moves_cache: Arc::new(OnceLock::new()),
+            active_initials: WorldIdSet::full(world_count),
+            checkpoint: HiddenCheckpoint {
+                depth: 0,
+                worlds: initial_worlds,
+            },
+            transition_cache: Arc::new(OnceLock::new()),
             mate_cache: Arc::new(OnceLock::new()),
         })
     }
@@ -284,7 +330,7 @@ impl ReplayHiddenState {
             return Ok([kind].into_iter().collect());
         }
         let mut result = KindSet::default();
-        self.for_each_world(&mut |world| {
+        self.for_each_world(&mut |_, world| {
             if let Some(piece) = world.variable(id) {
                 result.insert(piece.kind);
             }
@@ -294,50 +340,27 @@ impl ReplayHiddenState {
     }
 
     pub fn observed_moves(&self) -> Result<Vec<ObservedMove>> {
-        if let Some(cached) = self.observed_moves_cache.get() {
-            return Ok(cached.clone());
-        }
-        let mut result = BTreeSet::new();
-        let free_white_move = self.history.is_empty() && self.free_white_move;
-        self.for_each_world(&mut |world| {
-            for (observed, _, _) in concrete_moves(&world, free_white_move, self.hand_variable_mode)
-            {
-                result.insert(observed);
-            }
-            Ok(())
-        })?;
-        let result = result.into_iter().collect::<Vec<_>>();
-        let _ = self.observed_moves_cache.set(result.clone());
-        Ok(result)
+        Ok(self.transitions()?.keys().copied().collect())
     }
 
     pub fn apply(&self, observed: ObservedMove) -> Result<Option<Self>> {
-        let mut world_count = 0usize;
-        let mut candidates = BTreeMap::<VariableId, KindSet>::new();
-        let free_white_move = self.history.is_empty() && self.free_white_move;
-        self.for_each_world(&mut |world| {
-            for (candidate, movement, selected_variable) in
-                concrete_moves(&world, free_white_move, self.hand_variable_mode)
-            {
-                if candidate == observed {
-                    let next = world.apply(observed, movement, selected_variable);
-                    world_count += 1;
-                    extend_candidate_sets(&mut candidates, &next);
-                }
-            }
-            Ok(())
-        })?;
-        if world_count == 0 {
+        let Some(transition) = self.transitions()?.get(&observed).cloned() else {
             return Ok(None);
-        }
+        };
 
-        let newly_resolved = uniquely_resolved(&candidates);
         let mut next = self.clone();
         next.history.push(observed);
-        next.resolved_steps.push(newly_resolved.clone());
-        next.resolved.extend(newly_resolved);
-        next.world_count = world_count;
-        next.observed_moves_cache = Arc::new(OnceLock::new());
+        next.resolved_steps.push(transition.newly_resolved.clone());
+        next.resolved.extend(transition.newly_resolved);
+        next.world_count = transition.worlds.len();
+        next.active_initials = transition.active_initials;
+        if next.history.len() % REPLAY_CHECKPOINT_INTERVAL == 0 {
+            next.checkpoint = HiddenCheckpoint {
+                depth: next.history.len(),
+                worlds: transition.worlds,
+            };
+        }
+        next.transition_cache = Arc::new(OnceLock::new());
         next.mate_cache = Arc::new(OnceLock::new());
         Ok(Some(next))
     }
@@ -351,7 +374,7 @@ impl ReplayHiddenState {
             return Ok(false);
         }
         let mut all_mated = true;
-        self.for_each_world(&mut |world| {
+        self.for_each_world(&mut |_, world| {
             let mut position = world.position().clone();
             let mated = match self.rule {
                 MateRule::Helpmate => {
@@ -372,11 +395,77 @@ impl ReplayHiddenState {
         Ok(all_mated)
     }
 
-    fn for_each_world(&self, visitor: &mut impl FnMut(ConcreteWorld) -> Result<()>) -> Result<()> {
-        for_each_initial_world(&self.problem, &mut |mut initial| {
-            forget_resolved(&mut initial, &self.resolved_steps[0]);
-            let mut frontier = vec![initial];
-            for (step, observed) in self.history.iter().copied().enumerate() {
+    fn transitions(&self) -> Result<&BTreeMap<ObservedMove, HiddenTransition>> {
+        if self.transition_cache.get().is_none() {
+            let transitions = self.build_transitions()?;
+            let _ = self.transition_cache.set(transitions);
+        }
+        Ok(self
+            .transition_cache
+            .get()
+            .expect("遷移キャッシュを設定済み"))
+    }
+
+    fn build_transitions(&self) -> Result<BTreeMap<ObservedMove, HiddenTransition>> {
+        let mut grouped = BTreeMap::<ObservedMove, Vec<SeededConcreteWorld>>::new();
+        let free_white_move = self.history.is_empty() && self.free_white_move;
+        self.for_each_world(&mut |initial_id, world| {
+            for (observed, movement, selected_variable) in
+                concrete_moves(&world, free_white_move, self.hand_variable_mode)
+            {
+                grouped
+                    .entry(observed)
+                    .or_default()
+                    .push(SeededConcreteWorld {
+                        initial_id,
+                        world: world.apply(observed, movement, selected_variable),
+                    });
+            }
+            Ok(())
+        })?;
+
+        Ok(grouped
+            .into_iter()
+            .map(|(observed, mut worlds)| {
+                let mut candidates = BTreeMap::<VariableId, KindSet>::new();
+                for seeded in &worlds {
+                    extend_candidate_sets(&mut candidates, &seeded.world);
+                }
+                let newly_resolved = uniquely_resolved(&candidates);
+                let mut active_initials =
+                    WorldIdSet::with_capacity(self.context.initial_worlds.len());
+                for seeded in &mut worlds {
+                    forget_resolved(&mut seeded.world, &newly_resolved);
+                    active_initials.insert(seeded.initial_id);
+                }
+                (
+                    observed,
+                    HiddenTransition {
+                        worlds: Arc::new(worlds),
+                        newly_resolved,
+                        active_initials,
+                    },
+                )
+            })
+            .collect())
+    }
+
+    fn for_each_world(
+        &self,
+        visitor: &mut impl FnMut(usize, ConcreteWorld) -> Result<()>,
+    ) -> Result<()> {
+        for seeded in self.checkpoint.worlds.iter() {
+            if !self.active_initials.contains(seeded.initial_id) {
+                continue;
+            }
+            let mut frontier = vec![seeded.world.clone()];
+            for (step, observed) in self
+                .history
+                .iter()
+                .copied()
+                .enumerate()
+                .skip(self.checkpoint.depth)
+            {
                 let mut next_frontier = Vec::new();
                 for world in frontier {
                     let free_white_move = step == 0 && self.free_white_move;
@@ -396,10 +485,10 @@ impl ReplayHiddenState {
                 }
             }
             for world in frontier {
-                visitor(world)?;
+                visitor(seeded.initial_id, world)?;
             }
-            Ok(())
-        })
+        }
+        Ok(())
     }
 }
 

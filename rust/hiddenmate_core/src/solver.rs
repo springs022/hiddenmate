@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, time::Instant};
+use std::collections::BTreeSet;
 
 use anyhow::Result;
 use fmrs_core::{
@@ -7,7 +7,8 @@ use fmrs_core::{
 };
 
 use crate::{
-    DropIdentity, HiddenState, MoveIdentity, ObservedMove, ReplayHiddenState, SolveMetrics,
+    clock::Clock, DropIdentity, HiddenState, MoveIdentity, ObservedMove, ReplayHiddenState,
+    SolveMetrics,
 };
 
 pub type Solution = Vec<ObservedMove>;
@@ -210,7 +211,7 @@ pub fn solve_exact_profiled(
     plies: usize,
     max_solutions: usize,
 ) -> (Vec<Solution>, SolveMetrics) {
-    let started = Instant::now();
+    let started = Clock::now();
     let mut metrics = SolveMetrics::new(initial.world_count());
     if max_solutions == 0 {
         metrics.total_elapsed = started.elapsed();
@@ -270,11 +271,11 @@ fn solve_inner(
         return;
     }
 
-    let move_started = Instant::now();
+    let move_started = Clock::now();
     let observed_moves = state.observed_moves();
     metrics.move_generation_elapsed += move_started.elapsed();
     for observed in observed_moves {
-        let transition_started = Instant::now();
+        let transition_started = Clock::now();
         let next = state.apply(observed);
         metrics.transition_elapsed += transition_started.elapsed();
         let Some(next) = next else {
@@ -312,7 +313,7 @@ pub fn solve_replay_exact_profiled(
     plies: usize,
     max_solutions: usize,
 ) -> Result<(Vec<Solution>, SolveMetrics)> {
-    let started = Instant::now();
+    let started = Clock::now();
     let mut metrics = SolveMetrics::new(initial.world_count());
     if max_solutions == 0 {
         metrics.total_elapsed = started.elapsed();
@@ -370,11 +371,11 @@ fn solve_replay_inner(
         return Ok(());
     }
 
-    let move_started = Instant::now();
+    let move_started = Clock::now();
     let observed_moves = state.observed_moves()?;
     metrics.move_generation_elapsed += move_started.elapsed();
     for observed in observed_moves {
-        let transition_started = Instant::now();
+        let transition_started = Clock::now();
         let next = state.apply(observed)?;
         metrics.transition_elapsed += transition_started.elapsed();
         let Some(next) = next else {

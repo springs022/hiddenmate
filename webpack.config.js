@@ -76,6 +76,15 @@ class StaticAssetsPlugin {
 module.exports = (env, argv) => {
   const isProd = argv && argv.mode === "production";
   const basePath = isProd ? "/hiddenmate/" : "/";
+  const wasmPackPlugins =
+    process.env.SKIP_WASM_PACK === "1"
+      ? []
+      : [
+          new WasmPackPlugin({
+            crateDirectory: path.resolve(__dirname, "rust/wasm"),
+            outDir: path.resolve(__dirname, "docs/pkg"),
+          }),
+        ];
   return {
     entry: "./app/src/index.tsx",
     output: {
@@ -119,10 +128,7 @@ module.exports = (env, argv) => {
         FMRS_API_BASE_URL: JSON.stringify(process.env.FMRS_API_BASE_URL || ""),
         FMRS_BASE_PATH: JSON.stringify(basePath),
       }),
-      new WasmPackPlugin({
-        crateDirectory: path.resolve(__dirname, "rust/wasm"),
-        outDir: path.resolve(__dirname, "docs/pkg"),
-      }),
+      ...wasmPackPlugins,
     ],
     experiments: {
       asyncWebAssembly: true,

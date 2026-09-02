@@ -2,6 +2,7 @@ export {
   Algorithm,
   BackwardSearch,
   Solver,
+  benchmark_candidate_backend,
   check_one_way_mate,
   is_white_in_check,
   solve_known_invisible_problem,

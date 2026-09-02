@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, time::Instant};
+use std::collections::BTreeSet;
 
 use anyhow::{bail, Context, Result};
 use fmrs_core::{
@@ -7,8 +7,8 @@ use fmrs_core::{
 };
 
 use crate::{
-    kind_set::KindSet, ConcreteWorld, EnumerationMetrics, HandVariableMode, HiddenState, MateRule,
-    ReplayHiddenState, VariableId, VariableLocation, VariablePiece,
+    clock::Clock, kind_set::KindSet, ConcreteWorld, EnumerationMetrics, HandVariableMode,
+    HiddenState, MateRule, ReplayHiddenState, VariableId, VariableLocation, VariablePiece,
 };
 
 const MAX_VARIABLES: usize = 6;
@@ -62,7 +62,7 @@ impl VariableProblem {
         self,
         hand_variable_mode: HandVariableMode,
     ) -> Result<(HiddenState, EnumerationMetrics)> {
-        let started = Instant::now();
+        let started = Clock::now();
         let state = self.enumerate_explicit_with_hand_variable_mode(hand_variable_mode)?;
         let metrics = EnumerationMetrics {
             world_count: state.world_count(),
@@ -110,7 +110,7 @@ impl VariableProblem {
         self,
         hand_variable_mode: HandVariableMode,
     ) -> Result<(ReplayHiddenState, EnumerationMetrics)> {
-        let started = Instant::now();
+        let started = Clock::now();
         let state = ReplayHiddenState::new(self, hand_variable_mode)?;
         let metrics = EnumerationMetrics {
             world_count: state.world_count(),

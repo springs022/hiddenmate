@@ -32,6 +32,20 @@ code {
   white-space: nowrap;
 }
 
+.variable-solution-move {
+  padding: 0;
+  border: 0;
+  border-bottom: 1px dotted currentColor;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.variable-solution-move[aria-pressed="true"] {
+  border-bottom-style: solid;
+  background: #fff3cd;
+}
+
 .variable-sfen-input {
   padding-top: 0.2rem;
   padding-bottom: 0.2rem;

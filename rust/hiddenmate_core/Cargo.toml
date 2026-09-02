@@ -11,5 +11,8 @@ fmrs_core = { path = "../fmrs_core" }
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "*"
+
 [dev-dependencies]
 pretty_assertions = "*"

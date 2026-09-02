@@ -4,6 +4,7 @@
 //! できる着手ごとに候補世界を絞り込む。覆面駒そのものを fmrs の
 //! `Kind` に追加しないため、既存の高速な合法手生成をそのまま利用できる。
 
+mod clock;
 mod format;
 mod kind_set;
 mod known_invisible;
@@ -14,6 +15,7 @@ mod rule;
 mod solver;
 mod state;
 mod world;
+mod world_id_set;
 
 pub use format::ProblemDocument;
 pub use known_invisible::{
