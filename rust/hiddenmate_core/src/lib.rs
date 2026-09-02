@@ -4,6 +4,7 @@
 //! できる着手ごとに候補世界を絞り込む。覆面駒そのものを fmrs の
 //! `Kind` に追加しないため、既存の高速な合法手生成をそのまま利用できる。
 
+mod best_mate;
 mod format;
 mod known_invisible;
 mod observed;
@@ -13,6 +14,7 @@ mod solver;
 mod state;
 mod world;
 
+pub use best_mate::{solve_best_mate, BestMateResult};
 pub use format::ProblemDocument;
 pub use known_invisible::{
     format_known_invisible_solution_japanese, solve_known_invisible_exact, KnownInvisibleDocument,

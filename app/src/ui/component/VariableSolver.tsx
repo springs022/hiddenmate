@@ -19,7 +19,7 @@ import Hands from "./Hands";
 import { ShiftDirection, Shifter } from "./Shifter";
 
 type InputMode = "form" | "json";
-type MateRule = "helpmate" | "helpSelfmate";
+type MateRule = "helpmate" | "helpSelfmate" | "bestMate";
 type HandVariableMode = "distinguishable" | "indistinguishable";
 type VariableLocation = { type: "board"; square: string } | { type: "hand" };
 
@@ -54,6 +54,8 @@ interface VariableSolveResponse {
   candidates: VariableCandidates[];
   solutions: string[][];
   solutionCandidates?: VariableCandidates[][][];
+  bestMateIn?: number;
+  variationsTruncated?: boolean;
 }
 
 interface VariableSolveResult {
@@ -1158,7 +1160,7 @@ export function VariableSolveControls(props: {
           controlId={`${idPrefix}-rule`}
         >
           <Form.Label>ルール</Form.Label>
-          <div className="d-flex gap-2 text-nowrap">
+          <div className="d-flex flex-wrap gap-2 text-nowrap">
             <Form.Check
               inline
               type="radio"
@@ -1167,6 +1169,16 @@ export function VariableSolveControls(props: {
               label="協力詰"
               checked={props.rule === "helpmate"}
               onChange={() => props.setRule!("helpmate")}
+              disabled={props.solving}
+            />
+            <Form.Check
+              inline
+              type="radio"
+              name={`${idPrefix}-rule`}
+              id={`${idPrefix}-rule-best-mate`}
+              label="最善詰"
+              checked={props.rule === "bestMate"}
+              onChange={() => props.setRule!("bestMate")}
               disabled={props.solving}
             />
             <Form.Check
@@ -1279,6 +1291,8 @@ export function VariableSolveControls(props: {
 }
 
 function VariableResult(props: VariableSolveResult) {
+  const bestMate = props.rule === "bestMate";
+  const lineLabel = bestMate ? "変化" : "解";
   const copyText = formatResultForCopy(props.response);
   const [selectedMove, setSelectedMove] = useState<{
     solutionIndex: number;
@@ -1291,17 +1305,25 @@ function VariableResult(props: VariableSolveResult) {
       ] ?? props.response.candidates
     : props.response.candidates;
   const candidateHeading = selectedMove
-    ? `駒種候補（解${selectedMove.solutionIndex + 1}：${selectedMove.moveIndex + 1}手目指了図）`
+    ? `駒種候補（${lineLabel}${selectedMove.solutionIndex + 1}：${selectedMove.moveIndex + 1}手目指了図）`
     : "駒種候補（初形）";
   return (
     <div aria-live="polite">
       <p className="mb-0">
-        {props.rule === "helpSelfmate" ? "協力自玉詰" : "協力詰"}
+        {props.rule === "helpSelfmate"
+          ? "協力自玉詰"
+          : bestMate
+            ? "最善詰"
+            : "協力詰"}
         {" "}
-        {props.plies}手
+        {bestMate
+          ? props.response.bestMateIn !== undefined
+            ? `${props.response.bestMateIn}手（上限${props.plies}手）`
+            : `上限${props.plies}手`
+          : `${props.plies}手`}
       </p>
       <p>
-        初形候補世界: <strong>{props.response.worldCount}</strong> ／ 解数:{" "}
+        初形候補世界: <strong>{props.response.worldCount}</strong> ／ {lineLabel}数:{" "}
         <strong>{props.response.solutions.length}</strong>
       </p>
       <Table bordered size="sm" className="variable-result-table">
@@ -1334,11 +1356,14 @@ function VariableResult(props: VariableSolveResult) {
         </Button>
       )}
       <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
-        <h3 className="h6 mb-0">解答</h3>
-        <CopyButton text={copyText} idleLabel="解答をコピー" />
+        <h3 className="h6 mb-0">{bestMate ? "作意・変化" : "解答"}</h3>
+        <CopyButton
+          text={copyText}
+          idleLabel={bestMate ? "作意・変化をコピー" : "解答をコピー"}
+        />
       </div>
       {props.response.solutions.length === 0 ? (
-        <p>解なし</p>
+        <p>{bestMate && props.response.bestMateIn !== undefined ? "変化表示なし" : "解なし"}</p>
       ) : (
         <ol className="variable-solution-list">
           {props.response.solutions.map((solution, index) => (
@@ -1349,7 +1374,7 @@ function VariableResult(props: VariableSolveResult) {
                     <button
                       type="button"
                       className="variable-solution-move"
-                      aria-label={`解${index + 1}の${moveIndex + 1}手目 ${move}`}
+                      aria-label={`${lineLabel}${index + 1}の${moveIndex + 1}手目 ${move}`}
                       aria-pressed={
                         selectedMove?.solutionIndex === index &&
                         selectedMove.moveIndex === moveIndex
@@ -1381,6 +1406,9 @@ function VariableResult(props: VariableSolveResult) {
             </li>
           ))}
         </ol>
+      )}
+      {props.response.variationsTruncated && (
+        <p className="text-muted">変化表示は最大解数で省略されています。</p>
       )}
     </div>
   );
@@ -1434,14 +1462,24 @@ async function copyToClipboard(text: string): Promise<void> {
 
 function formatResultForCopy(response: VariableSolveResponse): string {
   if (response.solutions.length === 0) {
-    return "解なし";
+    return response.bestMateIn === undefined
+      ? "解なし"
+      : `最善詰 ${response.bestMateIn}手（変化表示なし）`;
   }
-  return response.solutions
+  const lines = response.solutions
     .map(
       (solution, index) =>
         `${index + 1}. ${solution.join(" ")} まで ${solution.length}手`,
     )
     .join("\n");
+  if (response.bestMateIn === undefined) {
+    return lines;
+  }
+  return [
+    `最善詰 ${response.bestMateIn}手`,
+    lines,
+    ...(response.variationsTruncated ? ["（変化表示は省略されています）"] : []),
+  ].join("\n");
 }
 
 function japaneseCandidateKind(kind: string): string {
@@ -1492,7 +1530,8 @@ function isProblemDocument(value: unknown): value is ProblemDocument {
     typeof document.plies === "number" &&
     (document.rule === undefined ||
       document.rule === "helpmate" ||
-      document.rule === "helpSelfmate") &&
+      document.rule === "helpSelfmate" ||
+      document.rule === "bestMate") &&
     (document.handVariableMode === undefined ||
       document.handVariableMode === "distinguishable" ||
       document.handVariableMode === "indistinguishable") &&

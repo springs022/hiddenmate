@@ -3,8 +3,8 @@ use std::{fs, path::PathBuf};
 use anyhow::{Context, Result};
 use clap::Parser;
 use hiddenmate_core::{
-    format_known_invisible_solution_japanese, format_solution_japanese, solve_exact,
-    solve_known_invisible_exact, KnownInvisibleDocument, ProblemDocument,
+    format_known_invisible_solution_japanese, format_solution_japanese, solve_best_mate,
+    solve_exact, solve_known_invisible_exact, KnownInvisibleDocument, MateRule, ProblemDocument,
 };
 
 #[derive(Debug, Parser)]
@@ -39,6 +39,23 @@ fn main() -> Result<()> {
     println!("初形候補世界: {}", state.world_count());
     for (id, candidates) in state.all_candidates() {
         println!("  V{}: {:?}", id.0, candidates);
+    }
+
+    if state.rule() == MateRule::BestMate {
+        let Some(result) = solve_best_mate(&state, plies, arguments.max_solutions)? else {
+            println!("解なし");
+            return Ok(());
+        };
+        println!("最善詰: {}手", result.mate_in);
+        println!("変化数: {}", result.variations.len());
+        for (index, variation) in result.variations.iter().enumerate() {
+            let moves = format_solution_japanese(&state, variation).join(" ");
+            println!("{}: {}", index + 1, moves);
+        }
+        if result.variations_truncated {
+            println!("（変化表示は最大解数で省略）");
+        }
+        return Ok(());
     }
 
     let solutions = solve_exact(&state, plies, arguments.max_solutions);

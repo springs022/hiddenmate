@@ -6,6 +6,7 @@ use fmrs_core::{
         advance::{advance::advance_aux, is_legal_mate, legal_movements},
         AdvanceOptions, Movement,
     },
+    sfen,
 };
 
 use crate::{ConcreteWorld, HandVariableMode, MateRule, ObservedMove, VariableId};
@@ -166,7 +167,7 @@ impl HiddenState {
         self.worlds.iter().all(|world| {
             let mut position = world.position().clone();
             match self.rule {
-                MateRule::Helpmate => {
+                MateRule::Helpmate | MateRule::BestMate => {
                     let mut movements = Vec::new();
                     matches!(
                         advance_aux(&mut position, &AdvanceOptions::default(), &mut movements),
@@ -178,6 +179,52 @@ impl HiddenState {
                 }
             }
         })
+    }
+
+    /// 最善詰探索の置換表で使う、候補世界と観測状態を含む完全なキー。
+    pub(crate) fn search_key(&self) -> String {
+        let mut worlds = self
+            .worlds
+            .iter()
+            .map(|world| {
+                let variables = world
+                    .variables()
+                    .map(|piece| {
+                        let location = match piece.location {
+                            crate::VariableLocation::Board(square) => {
+                                format!("b{}{}", square.col(), square.row())
+                            }
+                            crate::VariableLocation::Hand(color) => {
+                                format!("h{}", usize::from(color.is_white()))
+                            }
+                        };
+                        format!(
+                            "{}:{}:{}:{}",
+                            piece.id.0,
+                            usize::from(piece.color.is_white()),
+                            piece.kind.index(),
+                            location
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!("{}[{variables}]", sfen::encode_position(world.position()))
+            })
+            .collect::<Vec<_>>();
+        worlds.sort_unstable();
+        let resolved = self
+            .resolved
+            .iter()
+            .map(|(id, kind)| format!("{}:{}", id.0, kind.index()))
+            .collect::<Vec<_>>()
+            .join(",");
+        format!(
+            "{}|{}|{}|{}",
+            usize::from(self.free_white_move),
+            self.hand_variable_mode as u8,
+            resolved,
+            worlds.join(";")
+        )
     }
 
     /// デバッグ/UI用に全覆面駒の候補をまとめて返す。

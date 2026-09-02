@@ -6,9 +6,9 @@ use std::collections::BTreeMap;
 
 use fmrs_core::piece::Kind;
 use hiddenmate_core::{
-    format_known_invisible_solution_japanese, format_solution_japanese, solve_exact,
-    solve_known_invisible_exact, HiddenState, KnownInvisibleDocument, ObservedMove,
-    ProblemDocument, Solution,
+    format_known_invisible_solution_japanese, format_solution_japanese, solve_best_mate,
+    solve_exact, solve_known_invisible_exact, HiddenState, KnownInvisibleDocument, MateRule,
+    ObservedMove, ProblemDocument, Solution,
 };
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
@@ -60,6 +60,9 @@ struct VariableSolveResponse {
     candidates: Vec<VariableCandidates>,
     solutions: Vec<Vec<String>>,
     solution_candidates: Vec<Vec<Vec<VariableCandidates>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    best_mate_in: Option<usize>,
+    variations_truncated: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -81,7 +84,19 @@ fn solve_variable_problem_json(json: &str, max_solutions: usize) -> anyhow::Resu
     let (problem, hand_variable_mode) = document.into_problem_with_hand_variable_mode()?;
     let state = problem.enumerate_with_hand_variable_mode(hand_variable_mode)?;
     let candidates = variable_candidates(&state);
-    let raw_solutions = solve_exact(&state, plies, max_solutions);
+    let (raw_solutions, best_mate_in, variations_truncated) = if state.rule() == MateRule::BestMate
+    {
+        match solve_best_mate(&state, plies, max_solutions)? {
+            Some(result) => (
+                result.variations,
+                Some(result.mate_in),
+                result.variations_truncated,
+            ),
+            None => (Vec::new(), None, false),
+        }
+    } else {
+        (solve_exact(&state, plies, max_solutions), None, false)
+    };
     let solution_candidates = collect_solution_candidates(&state, &raw_solutions)?;
     let solutions = raw_solutions
         .iter()
@@ -92,6 +107,8 @@ fn solve_variable_problem_json(json: &str, max_solutions: usize) -> anyhow::Resu
         candidates,
         solutions,
         solution_candidates,
+        best_mate_in,
+        variations_truncated,
     };
     Ok(serde_json::to_string(&response)?)
 }
@@ -270,6 +287,28 @@ mod hiddenmate_tests {
             .collect::<Vec<_>>();
 
         assert_eq!(lengths, vec![2, 4, 4, 4]);
+    }
+
+    #[test]
+    fn solves_best_mate_rule_for_web() {
+        let json = r#"{
+            "baseSfen": "9/9/kS7/N8/1L7/9/9/9/9 b R 1",
+            "plies": 1,
+            "rule": "bestMate",
+            "variables": []
+        }"#;
+
+        let response = solve_variable_problem_json(json, 100).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&response).unwrap();
+
+        assert_eq!(value["bestMateIn"], 1);
+        assert_eq!(value["variationsTruncated"], false);
+        assert!(!value["solutions"].as_array().unwrap().is_empty());
+        assert!(value["solutions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|line| line.as_array().unwrap().len() == 1));
     }
 
     #[test]

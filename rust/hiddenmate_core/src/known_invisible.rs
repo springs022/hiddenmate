@@ -61,6 +61,9 @@ impl KnownInvisibleDocument {
     }
 
     pub fn into_problem(self) -> Result<(KnownInvisibleProblem, usize)> {
+        if self.rule == MateRule::BestMate {
+            bail!("最善詰は現在、覆面駒でのみ利用できます");
+        }
         let mut base = PositionAux::from_sfen(&self.base_sfen)
             .with_context(|| format!("SFENを解釈できません: {}", self.base_sfen))?;
         base.set_turn(self.rule.initial_turn(self.plies));
@@ -425,7 +428,7 @@ fn legal_initial_world(position: &PositionAux, rule: MateRule) -> bool {
     let black_kings = position.bitboard(Color::BLACK, Kind::King).count_ones();
     if white_kings != 1
         || match rule {
-            MateRule::Helpmate => black_kings > 1,
+            MateRule::Helpmate | MateRule::BestMate => black_kings > 1,
             MateRule::HelpSelfmate => black_kings != 1,
         }
     {
@@ -526,7 +529,7 @@ impl KnownInvisibleState {
         self.worlds.iter().all(|world| {
             let mut position = world.position.clone();
             match self.rule {
-                MateRule::Helpmate => {
+                MateRule::Helpmate | MateRule::BestMate => {
                     let mut movements = Vec::new();
                     matches!(
                         advance_aux(&mut position, &AdvanceOptions::default(), &mut movements),

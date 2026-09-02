@@ -258,4 +258,23 @@ mod tests {
         assert_eq!(problem.rule, MateRule::HelpSelfmate);
         assert_eq!(position.turn(), Color::BLACK);
     }
+
+    #[test]
+    fn best_mate_supports_white_start_with_even_plies() {
+        let document = ProblemDocument::from_json(
+            r#"{
+                "baseSfen": "8k/9/9/9/9/9/9/9/9 b - 1",
+                "plies": 2,
+                "rule": "bestMate",
+                "variables": []
+            }"#,
+        )
+        .unwrap();
+
+        let problem = document.into_problem().unwrap();
+        let position = PositionAux::from_sfen(&problem.base_sfen).unwrap();
+
+        assert_eq!(problem.rule, MateRule::BestMate);
+        assert_eq!(position.turn(), Color::WHITE);
+    }
 }

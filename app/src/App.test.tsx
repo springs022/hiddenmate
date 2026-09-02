@@ -628,6 +628,19 @@ test("starts with help-selfmate and can include helpmate in problem JSON", () =>
   ).toContain('"rule": "helpmate"');
 });
 
+test("can select best mate in variable problems", () => {
+  render(<App />);
+  const bestMate = screen.getByLabelText("最善詰") as HTMLInputElement;
+
+  fireEvent.click(bestMate);
+
+  expect(bestMate.checked).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "JSON詳細編集" }));
+  expect(
+    (screen.getByLabelText("問題JSON") as HTMLTextAreaElement).value,
+  ).toContain('"rule": "bestMate"');
+});
+
 test("defaults to indistinguishable hand variables and can select distinguishable", () => {
   render(<App />);
 

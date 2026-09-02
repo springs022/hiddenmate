@@ -3,8 +3,9 @@ use fmrs_core::{
     position::Square,
 };
 use hiddenmate_core::{
-    format_solution_japanese, solve_exact, DropIdentity, HandVariableMode, MateRule, MoveIdentity,
-    ObservedMove, VariableId, VariableLocation, VariableProblem, VariableSpec,
+    format_solution_japanese, solve_best_mate, solve_exact, DropIdentity, HandVariableMode,
+    MateRule, MoveIdentity, ObservedMove, VariableId, VariableLocation, VariableProblem,
+    VariableSpec,
 };
 
 fn square(file: usize, rank: usize) -> Square {
@@ -345,6 +346,55 @@ fn solves_one_ply_variable_helpmate() {
     assert!(solve_exact(&state, 3, 10)
         .iter()
         .any(|solution| solution.len() == 1));
+}
+
+#[test]
+fn solves_one_ply_variable_best_mate() {
+    let state = VariableProblem {
+        base_sfen: "9/9/kS7/N8/1L7/9/9/9/9 b - 1".to_string(),
+        rule: MateRule::BestMate,
+        variables: vec![VariableSpec {
+            id: VariableId(1),
+            color: Color::BLACK,
+            location: VariableLocation::Board(square(6, 4)),
+            candidates: vec![Kind::Rook, Kind::ProRook],
+        }],
+    }
+    .enumerate()
+    .unwrap();
+
+    let result = solve_best_mate(&state, 1, 10).unwrap().unwrap();
+
+    assert_eq!(result.mate_in, 1);
+    assert_eq!(result.variations.len(), 1);
+    assert_eq!(
+        format_solution_japanese(&state, &result.variations[0]),
+        vec!["84▲(64)"]
+    );
+}
+
+#[test]
+fn best_mate_rejects_a_cooperative_line_with_an_escape() {
+    let base_sfen = "3+pks3/9/4+P4/9/9/8B/9/9/9 b S2rb4g2s4n4l16p 1";
+    let cooperative = VariableProblem {
+        base_sfen: base_sfen.to_string(),
+        rule: MateRule::Helpmate,
+        variables: vec![],
+    }
+    .enumerate()
+    .unwrap();
+    assert!(solve_exact(&cooperative, 3, 10)
+        .iter()
+        .any(|solution| solution.len() == 3));
+
+    let best_mate = VariableProblem {
+        base_sfen: base_sfen.to_string(),
+        rule: MateRule::BestMate,
+        variables: vec![],
+    }
+    .enumerate()
+    .unwrap();
+    assert!(solve_best_mate(&best_mate, 3, 10).unwrap().is_none());
 }
 
 #[test]

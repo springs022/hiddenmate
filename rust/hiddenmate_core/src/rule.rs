@@ -10,6 +10,8 @@ pub enum MateRule {
     Helpmate,
     /// 受方（白）が攻方玉を詰める。
     HelpSelfmate,
+    /// 攻方は最短での詰みを目指し、受方は不詰、次いで最長手数を目指す。
+    BestMate,
 }
 
 /// 同じ駒台にある複数の覆面駒を着手時に個体識別できるか。
@@ -26,7 +28,7 @@ pub enum HandVariableMode {
 impl MateRule {
     pub(crate) fn terminal_turn(self) -> Color {
         match self {
-            Self::Helpmate => Color::WHITE,
+            Self::Helpmate | Self::BestMate => Color::WHITE,
             Self::HelpSelfmate => Color::BLACK,
         }
     }

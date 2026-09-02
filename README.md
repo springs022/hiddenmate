@@ -1,6 +1,6 @@
 # HiddenMate
 
-覆面駒、および駒種を指定した透明駒を使用する協力詰・協力自玉詰を検討するソフトウェアです。駒種も不明な通常の透明駒機能は現在開発中です。
+覆面駒を使用する協力詰・協力自玉詰・最善詰と、駒種を指定した透明駒を使用する協力詰・協力自玉詰を検討するソフトウェアです。駒種も不明な通常の透明駒機能は現在開発中です。
 
 Web版: **[HiddenMateを開く](https://springs022.github.io/hiddenmate/)**
 
@@ -20,7 +20,7 @@ Web版: **[HiddenMateを開く](https://springs022.github.io/hiddenmate/)**
 
 ## 現在の実装状況
 
-現在は、覆面駒と「透明駒（駒種指定）」を使用した協力詰・協力自玉詰の検討に対応しています。位置と駒種の両方が不明な通常の透明駒は開発中です。
+現在は、覆面駒を使用した協力詰・協力自玉詰・最善詰と、「透明駒（駒種指定）」を使用した協力詰・協力自玉詰の検討に対応しています。最善詰では攻方最短・受方不詰優先／最長として全応手を検証します。位置と駒種の両方が不明な通常の透明駒は開発中です。
 
 ## CLI
 
@@ -29,6 +29,7 @@ Rust環境で次を実行します。
 ```console
 cd rust
 cargo run -p hiddenmate_cli -- ../examples/variable-help-selfmate.json
+cargo run -p hiddenmate_cli -- ../examples/variable-best-mate.json
 cargo run -p hiddenmate_cli -- ../examples/known-invisible-helpmate.json
 ```
 

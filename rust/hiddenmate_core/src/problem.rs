@@ -246,7 +246,7 @@ fn build_world(
     let black_kings = position.bitboard(Color::BLACK, Kind::King).count_ones();
     if white_kings != 1
         || match rule {
-            MateRule::Helpmate => black_kings > 1,
+            MateRule::Helpmate | MateRule::BestMate => black_kings > 1,
             MateRule::HelpSelfmate => black_kings != 1,
         }
     {

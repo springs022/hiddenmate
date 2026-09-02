@@ -7,7 +7,7 @@ import { newState, reduce } from "../state/state";
 import { ShiftDirection } from "./Shifter";
 import { VariablePositionEditor, VariableSolveControls } from "./VariableSolver";
 
-type MateRule = "helpmate" | "helpSelfmate";
+type MateRule = "helpmate" | "helpSelfmate" | "bestMate";
 type InputMode = "form" | "json";
 type InvisibleKind = Kind | "+P" | "+L" | "+N" | "+S" | "+B" | "+R";
 type Counts = Record<Color, Record<InvisibleKind, number>>;
