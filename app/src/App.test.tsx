@@ -58,11 +58,19 @@ test("renders HiddenMate title", () => {
   expect(homepageLink.getAttribute("target")).toBe("_blank");
   expect(homepageLink.getAttribute("rel")).toBe("noopener noreferrer");
   expect(screen.getByText("覆面駒・透明駒の検討")).not.toBeNull();
-  expect(screen.getByRole("heading", { name: "覆面駒" })).not.toBeNull();
+  const variableHeading = screen.getByRole("heading", { name: "覆面駒" });
+  const variableToggle = screen.getByRole("button", {
+    name: "覆面駒の入力を閉じる",
+  });
+  expect(variableToggle.classList.contains("card-header")).toBe(true);
+  expect(variableHeading.closest("button")).toBe(variableToggle);
+  expect(variableToggle.getAttribute("aria-expanded")).toBe("true");
   expect(
     screen.getByRole("heading", { name: "透明駒（駒種指定）" }),
   ).not.toBeNull();
-  expect(screen.getByRole("button", { name: "入力を開く" })).not.toBeNull();
+  expect(
+    screen.getByRole("button", { name: "透明駒（駒種指定）の入力を開く" }),
+  ).not.toBeNull();
   expect(screen.queryByText("覆面駒版 β")).toBeNull();
   expect(screen.getByRole("heading", { name: "透明駒" })).not.toBeNull();
   expect(screen.getByText(/透明駒の検討機能は開発中です/)).not.toBeNull();
@@ -94,15 +102,30 @@ test("renders HiddenMate title", () => {
   expect(screen.getByRole("button", { name: "検討" })).not.toBeNull();
   expect(screen.getByRole("heading", { name: "保存局面" })).not.toBeNull();
   expect(screen.queryByRole("heading", { name: "通常協力詰" })).toBeNull();
+  fireEvent.click(variableHeading);
+  expect(
+    screen.getByRole("button", { name: "覆面駒の入力を開く" }),
+  ).not.toBeNull();
+  expect(screen.queryByRole("button", { name: "検討" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "覆面駒の入力を開く" }));
+  expect(screen.getByRole("button", { name: "検討" })).not.toBeNull();
 });
 
 test("configures at most two known-kind invisible pieces", () => {
   const { container } = render(<App />);
   expect((screen.getByLabelText("最大解数") as HTMLInputElement).value).toBe("20");
-  const openButton = screen.getByRole("button", { name: "入力を開く" });
-  expect(openButton.closest(".card-header")).not.toBeNull();
-  expect(openButton.textContent).toBe("");
-  fireEvent.click(openButton);
+  const openButton = screen.getByRole("button", {
+    name: "透明駒（駒種指定）の入力を開く",
+  });
+  const invisibleHeading = screen.getByRole("heading", {
+    name: "透明駒（駒種指定）",
+  });
+  expect(openButton.classList.contains("card-header")).toBe(true);
+  expect(invisibleHeading.closest("button")).toBe(openButton);
+  fireEvent.click(invisibleHeading);
+  expect(
+    screen.getByRole("button", { name: "透明駒（駒種指定）の入力を閉じる" }),
+  ).not.toBeNull();
   const solver = container.querySelector(".known-invisible-solver")!;
   const panel = within(solver as HTMLElement);
   const description = panel.getByText(
@@ -157,7 +180,9 @@ test("configures at most two known-kind invisible pieces", () => {
 
 test("shows known invisible rule, plies, and piece summary above counts", async () => {
   const { container } = render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: "入力を開く" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "透明駒（駒種指定）の入力を開く" }),
+  );
   const solver = container.querySelector(".known-invisible-solver")!;
   const panel = within(solver as HTMLElement);
   fireEvent.click(panel.getByRole("button", { name: "JSON詳細編集" }));
@@ -328,7 +353,7 @@ test("clears piece selections when clicking outside the board and hands", () => 
   const { container } = render(<App />);
   const silverSquare = placeSilverAt83();
   const variableButton = screen.getByRole("button", { name: /▲V1 14/ });
-  const outside = screen.getByRole("heading", { name: "覆面駒" });
+  const outside = screen.getByRole("heading", { name: "HiddenMate" });
 
   fireEvent.click(silverSquare);
   expect(silverSquare.style.backgroundColor).not.toBe("white");

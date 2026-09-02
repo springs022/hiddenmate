@@ -10,6 +10,7 @@ import {
   Spinner,
   Table,
 } from "react-bootstrap";
+import { BsChevronDown, BsChevronUp } from "react-icons/bs";
 import { Color, Position, decodeSfen, encodeSfen } from "../../model";
 import { positionPieceBox } from "../../model/position";
 import { VariableSolverClient } from "../../solve/variable_solver_client";
@@ -263,6 +264,7 @@ const initialProblem = buildProblemJson(
 );
 
 export function VariableSolver() {
+  const [open, setOpen] = useState(true);
   const [editorState, dispatch] = useReducer(reduce, undefined, () => {
     const state = newState();
     state.position = editablePositionFromBaseSfen(initialBaseSfen);
@@ -594,10 +596,20 @@ export function VariableSolver() {
 
   return (
     <Card className="mb-4">
-      <Card.Header as="h2" className="h5 mb-0">
-        覆面駒
+      <Card.Header
+        as="button"
+        type="button"
+        className="solver-card-toggle d-flex align-items-center justify-content-between text-start"
+        aria-label={open ? "覆面駒の入力を閉じる" : "覆面駒の入力を開く"}
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <h2 className="h5 mb-0">覆面駒</h2>
+        <span className="text-secondary">
+          {open ? <BsChevronUp aria-hidden="true" /> : <BsChevronDown aria-hidden="true" />}
+        </span>
       </Card.Header>
-      <Card.Body>
+      {open && <Card.Body>
         <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
           <ButtonGroup aria-label="問題入力方法">
             <Button
@@ -723,7 +735,7 @@ export function VariableSolver() {
             {result && <VariableResult {...result} />}
           </div>
         )}
-      </Card.Body>
+      </Card.Body>}
     </Card>
   );
 }

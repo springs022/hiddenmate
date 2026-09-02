@@ -194,17 +194,18 @@ export function KnownInvisibleSolver() {
   </>;
 
   return <Card className="mb-4 known-invisible-solver">
-    <Card.Header className="d-flex align-items-center justify-content-between">
+    <Card.Header
+      as="button"
+      type="button"
+      className="solver-card-toggle d-flex align-items-center justify-content-between text-start"
+      aria-label={open ? "透明駒（駒種指定）の入力を閉じる" : "透明駒（駒種指定）の入力を開く"}
+      aria-expanded={open}
+      onClick={() => setOpen((current) => !current)}
+    >
       <h2 className="h5 mb-0">透明駒（駒種指定）</h2>
-      <Button
-        className="known-invisible-toggle p-0 text-secondary"
-        variant="link"
-        aria-label={open ? "入力を閉じる" : "入力を開く"}
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-      >
+      <span className="text-secondary">
         {open ? <BsChevronUp aria-hidden="true" /> : <BsChevronDown aria-hidden="true" />}
-      </Button>
+      </span>
     </Card.Header>
     {open && <Card.Body>
       <p className="small text-muted">駒種と所属が分かっていて、位置だけが不明な透明駒です。合計2枚まで指定できます。</p>

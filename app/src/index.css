@@ -352,6 +352,16 @@ code {
   white-space: pre-wrap;
 }
 
+.solver-card-toggle {
+  appearance: none;
+  width: 100%;
+  border-top: 0;
+  border-right: 0;
+  border-left: 0;
+  color: inherit;
+  cursor: pointer;
+}
+
 .known-invisible-solutions {
   padding-left: 1.5rem;
 }
