@@ -177,6 +177,7 @@ export function KnownInvisibleSolver() {
     setPlies={inputMode === "form" ? (value) => { setPlies(value); clear(); } : undefined}
     rule={inputMode === "form" ? rule : undefined}
     setRule={inputMode === "form" ? (value) => { setRule(value); clear(); } : undefined}
+    ruleOptions={["helpmate", "helpSelfmate"]}
     maxSolutions={maxSolutions}
     setMaxSolutions={setMaxSolutions}
     solving={solving}

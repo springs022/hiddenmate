@@ -117,6 +117,12 @@ test("configures at most two known-kind invisible pieces", () => {
   ).not.toBe(0);
   expect(panel.getByRole("button", { name: "盤面・フォーム" })).not.toBeNull();
   expect(panel.getByLabelText("手数")).not.toBeNull();
+  const rule = panel.getByLabelText("ルール") as HTMLSelectElement;
+  expect(Array.from(rule.options).map((option) => option.text)).toEqual([
+    "協力詰",
+    "協力自玉詰",
+  ]);
+  expect(rule.value).toBe("helpmate");
   expect((panel.getByLabelText("最大解数") as HTMLInputElement).value).toBe("20");
   expect(panel.queryByText("最大手数")).toBeNull();
   expect(panel.getByRole("button", { name: "双玉のみ" })).not.toBeNull();
@@ -246,9 +252,9 @@ test("starts with the help-selfmate sample", () => {
     (screen.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
   ).toBe("9/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1");
   expect((screen.getByLabelText("手数") as HTMLInputElement).value).toBe("4");
-  expect(
-    (screen.getByLabelText("協力自玉詰") as HTMLInputElement).checked,
-  ).toBe(true);
+  expect((screen.getByLabelText("ルール") as HTMLSelectElement).value).toBe(
+    "helpSelfmate",
+  );
   expect(screen.getByLabelText("14 V1")).not.toBeNull();
   expect(screen.getByLabelText("26 V2")).not.toBeNull();
   expect(screen.getByLabelText("33 V3")).not.toBeNull();
@@ -415,9 +421,9 @@ test("loads the sample below the all-pieces-in-box position", () => {
     (screen.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
   ).toBe("9/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1");
   expect((screen.getByLabelText("手数") as HTMLInputElement).value).toBe("4");
-  expect(
-    (screen.getByLabelText("協力自玉詰") as HTMLInputElement).checked,
-  ).toBe(true);
+  expect((screen.getByLabelText("ルール") as HTMLSelectElement).value).toBe(
+    "helpSelfmate",
+  );
   expect(screen.getByLabelText("14 V1")).not.toBeNull();
   expect(screen.getByLabelText("26 V2")).not.toBeNull();
   expect(screen.getByLabelText("33 V3")).not.toBeNull();
@@ -615,12 +621,16 @@ test("allows clearing the plies field before entering a new value", () => {
 test("starts with help-selfmate and can include helpmate in problem JSON", () => {
   render(<App />);
 
-  const helpmate = screen.getByLabelText("協力詰") as HTMLInputElement;
-  const helpSelfmate = screen.getByLabelText("協力自玉詰") as HTMLInputElement;
-  expect(helpSelfmate.checked).toBe(true);
+  const rule = screen.getByLabelText("ルール") as HTMLSelectElement;
+  expect(rule.value).toBe("helpSelfmate");
+  expect(Array.from(rule.options).map((option) => option.text)).toEqual([
+    "協力詰",
+    "協力自玉詰",
+    "最善詰",
+  ]);
 
-  fireEvent.click(helpmate);
-  expect(helpmate.checked).toBe(true);
+  fireEvent.change(rule, { target: { value: "helpmate" } });
+  expect(rule.value).toBe("helpmate");
   fireEvent.click(screen.getByRole("button", { name: "JSON詳細編集" }));
 
   expect(
@@ -630,11 +640,9 @@ test("starts with help-selfmate and can include helpmate in problem JSON", () =>
 
 test("can select best mate in variable problems", () => {
   render(<App />);
-  const bestMate = screen.getByLabelText("最善詰") as HTMLInputElement;
-
-  fireEvent.click(bestMate);
-
-  expect(bestMate.checked).toBe(true);
+  const rule = screen.getByLabelText("ルール") as HTMLSelectElement;
+  fireEvent.change(rule, { target: { value: "bestMate" } });
+  expect(rule.value).toBe("bestMate");
   fireEvent.click(screen.getByRole("button", { name: "JSON詳細編集" }));
   expect(
     (screen.getByLabelText("問題JSON") as HTMLTextAreaElement).value,
@@ -643,7 +651,9 @@ test("can select best mate in variable problems", () => {
 
 test("shows best-mate results as ordinary numbered answers", async () => {
   const { container } = render(<App />);
-  fireEvent.click(screen.getByLabelText("最善詰"));
+  fireEvent.change(screen.getByLabelText("ルール"), {
+    target: { value: "bestMate" },
+  });
   fireEvent.change(screen.getByLabelText("手数"), { target: { value: "5" } });
   fireEvent.click(screen.getByRole("button", { name: "検討" }));
   act(() => {
@@ -732,7 +742,9 @@ test("copies the generated problem JSON", async () => {
 
 test("copies only formatted solutions", async () => {
   render(<App />);
-  fireEvent.click(screen.getByLabelText("協力自玉詰"));
+  fireEvent.change(screen.getByLabelText("ルール"), {
+    target: { value: "helpSelfmate" },
+  });
   fireEvent.change(screen.getByLabelText("手数"), {
     target: { value: "4" },
   });

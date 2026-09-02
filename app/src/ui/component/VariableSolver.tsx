@@ -20,6 +20,16 @@ import { ShiftDirection, Shifter } from "./Shifter";
 
 type InputMode = "form" | "json";
 type MateRule = "helpmate" | "helpSelfmate" | "bestMate";
+const mateRuleLabels: Record<MateRule, string> = {
+  helpmate: "協力詰",
+  helpSelfmate: "協力自玉詰",
+  bestMate: "最善詰",
+};
+const defaultMateRules: readonly MateRule[] = [
+  "helpmate",
+  "helpSelfmate",
+  "bestMate",
+];
 type HandVariableMode = "distinguishable" | "indistinguishable";
 type VariableLocation = { type: "board"; square: string } | { type: "hand" };
 
@@ -1134,6 +1144,7 @@ export function VariableSolveControls(props: {
   setPlies?: (plies: number) => void;
   rule?: MateRule;
   setRule?: (rule: MateRule) => void;
+  ruleOptions?: readonly MateRule[];
   handVariableMode?: HandVariableMode;
   setHandVariableMode?: (mode: HandVariableMode) => void;
   maxSolutions: number;
@@ -1160,38 +1171,17 @@ export function VariableSolveControls(props: {
           controlId={`${idPrefix}-rule`}
         >
           <Form.Label>ルール</Form.Label>
-          <div className="d-flex flex-wrap gap-2 text-nowrap">
-            <Form.Check
-              inline
-              type="radio"
-              name={`${idPrefix}-rule`}
-              id={`${idPrefix}-rule-helpmate`}
-              label="協力詰"
-              checked={props.rule === "helpmate"}
-              onChange={() => props.setRule!("helpmate")}
-              disabled={props.solving}
-            />
-            <Form.Check
-              inline
-              type="radio"
-              name={`${idPrefix}-rule`}
-              id={`${idPrefix}-rule-best-mate`}
-              label="最善詰"
-              checked={props.rule === "bestMate"}
-              onChange={() => props.setRule!("bestMate")}
-              disabled={props.solving}
-            />
-            <Form.Check
-              inline
-              type="radio"
-              name={`${idPrefix}-rule`}
-              id={`${idPrefix}-rule-help-selfmate`}
-              label="協力自玉詰"
-              checked={props.rule === "helpSelfmate"}
-              onChange={() => props.setRule!("helpSelfmate")}
-              disabled={props.solving}
-            />
-          </div>
+          <Form.Select
+            value={props.rule}
+            onChange={(event) => props.setRule!(event.target.value as MateRule)}
+            disabled={props.solving}
+          >
+            {(props.ruleOptions ?? defaultMateRules).map((option) => (
+              <option value={option} key={option}>
+                {mateRuleLabels[option]}
+              </option>
+            ))}
+          </Form.Select>
         </Form.Group>
       )}
       {props.handVariableMode !== undefined && props.setHandVariableMode && (
