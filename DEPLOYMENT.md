@@ -121,6 +121,18 @@ https://<GitHubユーザー名>.github.io/hiddenmate/
 5. 上記4ジョブがすべて`success`になるまで確認する。
 6. `https://springs022.github.io/hiddenmate/`を開き、HTTP応答だけでなく、変更した機能または生成物が実際に配信されていることを確認する。
 
+## 一時プレビュー
+
+本番トップページを変更せず、GitHub Pagesの`dev/`配下へ一時プレビューを置く場合は、
+Webpackへ公開先のベースパスを明示する。
+
+```powershell
+pnpm exec webpack --mode production --env basePath=/hiddenmate/dev/<preview-name>/
+```
+
+生成された`docs/`の内容を`gh-pages`ブランチの`dev/<preview-name>/`へ配置する。
+プレビューは公開URLとなるため、ユーザーの明示的な依頼がある場合だけpushし、確認後は同じディレクトリを削除する。
+
 GitHub ActionsのステータスはGitHub UI、`gh run`、またはGitHub APIで確認できます。公開APIでジョブ詳細が取得できない場合、ログ閲覧にはGitHubへの認証が必要です。資格情報やトークンをコマンド出力・ログ・文書へ表示してはいけません。
 
 ## 公開サイトのキャッシュ確認

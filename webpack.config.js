@@ -75,7 +75,12 @@ class StaticAssetsPlugin {
 
 module.exports = (env, argv) => {
   const isProd = argv && argv.mode === "production";
-  const basePath = isProd ? "/hiddenmate/" : "/";
+  const configuredBasePath =
+    env && typeof env.basePath === "string" ? env.basePath : undefined;
+  const basePath = configuredBasePath || (isProd ? "/hiddenmate/" : "/");
+  if (!basePath.startsWith("/") || !basePath.endsWith("/")) {
+    throw new Error("basePath must start and end with '/'");
+  }
   return {
     entry: "./app/src/index.tsx",
     output: {
