@@ -130,7 +130,8 @@ Webpackへ公開先のベースパスを明示する。
 pnpm exec webpack --mode production --env basePath=/hiddenmate/dev/<preview-name>/
 ```
 
-生成された`docs/`の内容を`gh-pages`ブランチの`dev/<preview-name>/`へ配置する。
+生成された`.preview-build/`の内容を`gh-pages`ブランチの`dev/<preview-name>/`へ配置する。
+プレビューではファイル名に内容ハッシュを付け、既存のブラウザキャッシュと衝突しないようにする。
 プレビューは公開URLとなるため、ユーザーの明示的な依頼がある場合だけpushし、確認後は同じディレクトリを削除する。
 
 GitHub ActionsのステータスはGitHub UI、`gh run`、またはGitHub APIで確認できます。公開APIでジョブ詳細が取得できない場合、ログ閲覧にはGitHubへの認証が必要です。資格情報やトークンをコマンド出力・ログ・文書へ表示してはいけません。

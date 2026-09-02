@@ -1292,7 +1292,7 @@ export function VariableSolveControls(props: {
 
 function VariableResult(props: VariableSolveResult) {
   const bestMate = props.rule === "bestMate";
-  const lineLabel = bestMate ? "変化" : "解";
+  const lineLabel = "解";
   const copyText = formatResultForCopy(props.response);
   const [selectedMove, setSelectedMove] = useState<{
     solutionIndex: number;
@@ -1323,7 +1323,7 @@ function VariableResult(props: VariableSolveResult) {
           : `${props.plies}手`}
       </p>
       <p>
-        初形候補世界: <strong>{props.response.worldCount}</strong> ／ {lineLabel}数:{" "}
+        初形候補世界: <strong>{props.response.worldCount}</strong> ／ 解数:{" "}
         <strong>{props.response.solutions.length}</strong>
       </p>
       <Table bordered size="sm" className="variable-result-table">
@@ -1356,14 +1356,15 @@ function VariableResult(props: VariableSolveResult) {
         </Button>
       )}
       <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
-        <h3 className="h6 mb-0">{bestMate ? "作意・変化" : "解答"}</h3>
-        <CopyButton
-          text={copyText}
-          idleLabel={bestMate ? "作意・変化をコピー" : "解答をコピー"}
-        />
+        <h3 className="h6 mb-0">解答</h3>
+        <CopyButton text={copyText} idleLabel="解答をコピー" />
       </div>
       {props.response.solutions.length === 0 ? (
-        <p>{bestMate && props.response.bestMateIn !== undefined ? "変化表示なし" : "解なし"}</p>
+        <p>
+          {bestMate && props.response.bestMateIn !== undefined
+            ? "変化表示なし"
+            : "解なし"}
+        </p>
       ) : (
         <ol className="variable-solution-list">
           {props.response.solutions.map((solution, index) => (

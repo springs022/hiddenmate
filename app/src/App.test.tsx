@@ -641,6 +641,55 @@ test("can select best mate in variable problems", () => {
   ).toContain('"rule": "bestMate"');
 });
 
+test("shows best-mate results as ordinary numbered answers", async () => {
+  const { container } = render(<App />);
+  fireEvent.click(screen.getByLabelText("最善詰"));
+  fireEvent.change(screen.getByLabelText("手数"), { target: { value: "5" } });
+  fireEvent.click(screen.getByRole("button", { name: "検討" }));
+  act(() => {
+    workerInstances[0].onmessage?.({ data: { type: "ready" } } as MessageEvent);
+    workerInstances[0].onmessage?.({
+      data: {
+        type: "solved",
+        requestId: 1,
+        responseJson: JSON.stringify({
+          worldCount: 48,
+          candidates: [
+            { id: 1, kinds: ["P", "L", "N", "S", "G", "B", "R"] },
+            { id: 2, kinds: ["P", "L", "N", "S", "G", "B", "R"] },
+          ],
+          bestMateIn: 5,
+          solutions: [
+            ["12▲打", "11玉(21)", "21▲成(12)", "同玉(11)", "12▲打"],
+            ["12▲打", "11玉(21)", "21▲成(12)", "同銀(32)", "23▲打"],
+          ],
+        }),
+      },
+    } as MessageEvent);
+  });
+
+  expect(await screen.findByText("最善詰 5手（上限5手）")).not.toBeNull();
+  expect(screen.getByRole("heading", { name: "解答" })).not.toBeNull();
+  expect(screen.queryByText("作意・変化")).toBeNull();
+  const counts = screen.getByText(/初形候補世界:/);
+  expect(counts.textContent).toContain("48");
+  expect(counts.textContent).toContain("解数: 2");
+  expect(counts.textContent).not.toContain("変化数");
+  expect(
+    container.querySelectorAll(".variable-solution-list > li"),
+  ).toHaveLength(2);
+  expect(container.textContent).not.toContain("1-1.");
+
+  fireEvent.click(screen.getByRole("button", { name: "解答をコピー" }));
+  expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+    [
+      "最善詰 5手",
+      "1. 12▲打 11玉(21) 21▲成(12) 同玉(11) 12▲打 まで 5手",
+      "2. 12▲打 11玉(21) 21▲成(12) 同銀(32) 23▲打 まで 5手",
+    ].join("\n"),
+  );
+});
+
 test("defaults to indistinguishable hand variables and can select distinguishable", () => {
   render(<App />);
 

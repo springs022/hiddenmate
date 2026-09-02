@@ -81,12 +81,15 @@ module.exports = (env, argv) => {
   if (!basePath.startsWith("/") || !basePath.endsWith("/")) {
     throw new Error("basePath must start and end with '/'");
   }
+  const previewBuild = configuredBasePath !== undefined;
   return {
     entry: "./app/src/index.tsx",
     output: {
-      path: path.join(__dirname, "docs"),
-      filename: "main.js",
+      path: path.join(__dirname, previewBuild ? ".preview-build" : "docs"),
+      filename: previewBuild ? "[contenthash].main.js" : "main.js",
+      chunkFilename: previewBuild ? "[contenthash].chunk.js" : "[id].main.js",
       publicPath: basePath,
+      clean: previewBuild,
     },
     module: {
       rules: [
