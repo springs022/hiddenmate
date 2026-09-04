@@ -398,6 +398,33 @@ fn best_mate_rejects_a_cooperative_line_with_an_escape() {
 }
 
 #[test]
+fn best_mate_displays_only_longest_defenses() {
+    let state = VariableProblem {
+        base_sfen: "9/9/9/9/9/9/6S1p/8k/9 b 2r2b4g3s4n4l17p 1".to_string(),
+        rule: MateRule::BestMate,
+        variables: vec![VariableSpec {
+            id: VariableId(1),
+            color: Color::BLACK,
+            location: VariableLocation::Board(square(3, 9)),
+            candidates: fmrs_core::piece::KINDS.to_vec(),
+        }],
+    }
+    .enumerate_with_hand_variable_mode(HandVariableMode::Indistinguishable)
+    .unwrap();
+
+    let result = solve_best_mate(&state, 5, 100).unwrap().unwrap();
+
+    assert_eq!(result.mate_in, 5);
+    assert!(!result.variations.is_empty());
+    assert!(result.variations.iter().all(|line| line.len() == 5));
+    assert!(result
+        .variations
+        .iter()
+        .map(|line| format_solution_japanese(&state, line).join(" "))
+        .all(|line| !line.starts_with("48▲(39) 28歩打 同龍")));
+}
+
+#[test]
 fn rejects_duplicate_variable_ids() {
     let error = VariableProblem {
         base_sfen: "9/9/k8/9/9/9/9/9/9 b - 1".to_string(),

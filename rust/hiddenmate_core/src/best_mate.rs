@@ -8,7 +8,7 @@ use crate::{HiddenState, MateRule, Solution};
 /// 最善詰の検討結果。
 ///
 /// `mate_in` は攻方最短・受方最長での手数。`variations` には最善攻と、
-/// 詰みを証明するために必要な受方の全応手を、従来UIで扱える手順へ展開して返す。
+/// 詰む場合に最長となる受方応手を、従来UIで扱える手順へ展開して返す。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BestMateResult {
     pub mate_in: usize,
@@ -125,7 +125,6 @@ fn collect_variations(
         return true;
     }
 
-    let attacker_turn = state.turn() == Color::BLACK;
     for observed in state.observed_moves() {
         let Some(next) = state.apply(observed) else {
             continue;
@@ -133,7 +132,8 @@ fn collect_variations(
         let Some(child_distance) = best_mate_distance(&next, remaining - 1, memo) else {
             continue;
         };
-        if attacker_turn && child_distance + 1 != distance {
+        // 攻方は最短、受方は最長となる着手だけを表示する。
+        if child_distance + 1 != distance {
             continue;
         }
 
