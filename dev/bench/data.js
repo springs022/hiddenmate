@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788595206611,
+  "lastUpdate": 1788595209990,
   "repoUrl": "https://github.com/springs022/hiddenmate",
   "entries": {
     "Instruction Count (iai-callgrind)": [
@@ -13245,6 +13245,148 @@ window.BENCHMARK_DATA = {
             "name": "bench_backward_search",
             "value": 30302,
             "range": "± 7",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "springs022",
+            "username": "springs022",
+            "email": "hit.and.miss.masayume@gmail.com"
+          },
+          "committer": {
+            "name": "springs022",
+            "username": "springs022",
+            "email": "hit.and.miss.masayume@gmail.com"
+          },
+          "id": "10b31fbf18a640fb5870c1ba60e3a44c403cfce6",
+          "message": "初形プリセットで特殊駒を消去",
+          "timestamp": "2026-09-05T07:39:04Z",
+          "url": "https://github.com/springs022/hiddenmate/commit/10b31fbf18a640fb5870c1ba60e3a44c403cfce6"
+        },
+        "date": 1788595208864,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "black_advance",
+            "value": 396,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "white_advance",
+            "value": 2710,
+            "range": "± 88",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "black_pinned",
+            "value": 192,
+            "range": "± 13",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "solve3",
+            "value": 407,
+            "range": "± 616",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "oneway",
+            "value": 25876,
+            "range": "± 102",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "reachable",
+            "value": 1608,
+            "range": "± 5",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "pinned300",
+            "value": 4575,
+            "range": "± 30",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bench_solve97",
+            "value": 1286060,
+            "range": "± 146",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "attacker",
+            "value": 11340,
+            "range": "± 55",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "canonicalize_attacker_goldish",
+            "value": 181,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "canonicalize_attacker_goldish_heavy",
+            "value": 95,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "canonicalize_attacker_goldish_empty",
+            "value": 39,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "canonical_digest_for_smoke",
+            "value": 147,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "canonical_digest_for_smoke_heavy",
+            "value": 36,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "canonical_digest_for_smoke_empty",
+            "value": 17,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "near_mate",
+            "value": 19272477,
+            "range": "± 534796",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bench_jugemu",
+            "value": 29411,
+            "range": "± 8",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bench_1965",
+            "value": 3536,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bench_1461",
+            "value": 17857,
+            "range": "± 4",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "bench_backward_search",
+            "value": 30771,
+            "range": "± 3",
             "unit": "ns/iter"
           }
         ]
