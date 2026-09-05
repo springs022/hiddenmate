@@ -77,16 +77,6 @@ interface VariableSolveResult {
 
 type CopyState = "idle" | "copied" | "error";
 
-interface SavedVariableProblem {
-  name: string;
-  problem: ProblemDocument;
-}
-
-interface SavedVariableProblemStore {
-  version: 3;
-  positions: SavedVariableProblem[];
-}
-
 const initialBaseSfen = "9/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1";
 const initialPlies = 4;
 const initialRule: MateRule = "helpSelfmate";
@@ -116,36 +106,7 @@ const initialVariables: VariableDraft[] = [
     location: { type: "board", square: "56" },
   },
 ];
-const savedPositionsKey = "hiddenmate_variable_saved_positions";
-const maxSavedPositions = 20;
 const maxVariables = 6;
-
-function defaultSavedVariableProblems(): SavedVariableProblem[] {
-  return [
-    {
-      name: "単玉のみ",
-      problem: buildProblemDocument(singleKingBaseSfen, 1, []),
-    },
-    {
-      name: "双玉のみ",
-      problem: buildProblemDocument(doubleKingBaseSfen, 1, []),
-    },
-    {
-      name: "すべて駒箱",
-      problem: buildProblemDocument(allPiecesInBoxBaseSfen, 1, []),
-    },
-    {
-      name: "サンプル",
-      problem: buildProblemDocument(
-        initialBaseSfen,
-        initialPlies,
-        initialVariables,
-        initialRule,
-        initialHandVariableMode,
-      ),
-    },
-  ];
-}
 
 function editablePositionFromBaseSfen(sfen: string): Position {
   return decodeSfen(sfen);
@@ -191,70 +152,6 @@ function buildProblemDocument(
   };
 }
 
-function loadSavedVariableProblems(): SavedVariableProblem[] {
-  try {
-    const raw = localStorage.getItem(savedPositionsKey);
-    if (!raw) {
-      return defaultSavedVariableProblems();
-    }
-    const parsed: unknown = JSON.parse(raw);
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      (parsed as Record<string, unknown>).version === 3
-    ) {
-      return validSavedVariableProblems(
-        (parsed as Record<string, unknown>).positions,
-      ).slice(0, maxSavedPositions);
-    }
-
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      ((parsed as Record<string, unknown>).version === 1 ||
-        (parsed as Record<string, unknown>).version === 2)
-    ) {
-      const legacy = validSavedVariableProblems(
-        (parsed as Record<string, unknown>).positions,
-      );
-      const defaultNames = new Set(
-        defaultSavedVariableProblems().map((position) => position.name),
-      );
-      return [
-        ...defaultSavedVariableProblems(),
-        ...legacy.filter((position) => !defaultNames.has(position.name)),
-      ].slice(0, maxSavedPositions);
-    }
-
-    // 旧形式（配列）から移行する際は、組み込み局面を補う。
-    const legacy = validSavedVariableProblems(parsed);
-    const legacyNames = new Set(legacy.map((position) => position.name));
-    return [
-      ...defaultSavedVariableProblems().filter(
-        (position) => !legacyNames.has(position.name),
-      ),
-      ...legacy,
-    ].slice(0, maxSavedPositions);
-  } catch {
-    return defaultSavedVariableProblems();
-  }
-}
-
-function validSavedVariableProblems(value: unknown): SavedVariableProblem[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.filter((entry): entry is SavedVariableProblem => {
-    if (!entry || typeof entry !== "object") {
-      return false;
-    }
-    const candidate = entry as Record<string, unknown>;
-    return (
-      typeof candidate.name === "string" && isProblemDocument(candidate.problem)
-    );
-  });
-}
-
 const initialProblem = buildProblemJson(
   initialBaseSfen,
   initialPlies,
@@ -274,19 +171,18 @@ export function VariableSolver() {
   const [sfenInput, setSfenInput] = useState(initialBaseSfen);
   const [plies, setPlies] = useState(initialPlies);
   const [rule, setRule] = useState<MateRule>(initialRule);
-  const [handVariableMode, setHandVariableMode] =
-    useState<HandVariableMode>(initialHandVariableMode);
+  const [handVariableMode, setHandVariableMode] = useState<HandVariableMode>(
+    initialHandVariableMode,
+  );
   const [variables, setVariables] = useState<VariableDraft[]>(initialVariables);
   const [selectedId, setSelectedId] = useState<number>(0);
   const [manualProblem, setManualProblem] = useState(initialProblem);
   const [maxSolutions, setMaxSolutions] = useState(20);
+  const [hideRedundantDefenses, setHideRedundantDefenses] = useState(false);
   const [result, setResult] = useState<VariableSolveResult>();
   const [error, setError] = useState<string>();
   const [solving, setSolving] = useState(false);
   const solverClient = useRef<VariableSolverClient>();
-  const [savedPositions, setSavedPositions] = useState<SavedVariableProblem[]>(
-    loadSavedVariableProblems,
-  );
 
   const baseSfen = baseSfenFromPosition(editorState.position);
   const selected = variables.find((variable) => variable.id === selectedId);
@@ -297,6 +193,16 @@ export function VariableSolver() {
     handVariableMode,
     variables,
   );
+  const manualRule = (() => {
+    try {
+      const problem: unknown = JSON.parse(manualProblem);
+      return isProblemDocument(problem)
+        ? (problem.rule ?? "helpmate")
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  })();
 
   useEffect(() => setSfenInput(baseSfen), [baseSfen]);
   useEffect(
@@ -305,18 +211,6 @@ export function VariableSolver() {
     },
     [],
   );
-  useEffect(() => {
-    try {
-      const store: SavedVariableProblemStore = {
-        version: 3,
-        positions: savedPositions,
-      };
-      localStorage.setItem(savedPositionsKey, JSON.stringify(store));
-    } catch {
-      // 保存容量不足などの場合も、盤面編集と検討は継続できるようにする。
-    }
-  }, [savedPositions]);
-
   useEffect(() => {
     const clearSelectionOutsideBoardAndHands = (event: MouseEvent) => {
       if (!editorState.selected.shown && selectedId === 0) {
@@ -347,6 +241,11 @@ export function VariableSolver() {
     }
     setError(undefined);
     setResult(undefined);
+  };
+
+  const changeHideRedundantDefenses = (hide: boolean) => {
+    setHideRedundantDefenses(hide);
+    clearResult();
   };
 
   const shiftBoard = (direction: ShiftDirection) => {
@@ -521,6 +420,15 @@ export function VariableSolver() {
     clearResult();
   };
 
+  const loadPositionPreset = (presetBaseSfen: string) => {
+    dispatch({
+      ty: "set-position",
+      position: editablePositionFromBaseSfen(presetBaseSfen),
+    });
+    setSelectedId(0);
+    clearResult();
+  };
+
   const loadJsonIntoForm = () => {
     try {
       const value: unknown = JSON.parse(manualProblem);
@@ -531,27 +439,6 @@ export function VariableSolver() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
-  };
-
-  const saveCurrentPosition = (name: string) => {
-    const trimmed = name.trim() || baseSfen;
-    const saved = {
-      name: trimmed,
-      problem: buildProblemDocument(
-        baseSfen,
-        plies,
-        variables,
-        rule,
-        handVariableMode,
-      ),
-    };
-    setSavedPositions((current) =>
-      [saved, ...current].slice(0, maxSavedPositions),
-    );
-  };
-
-  const deleteSavedPosition = (index: number) => {
-    setSavedPositions((current) => current.filter((_, i) => i !== index));
   };
 
   const solve = async () => {
@@ -575,7 +462,11 @@ export function VariableSolver() {
         (solverClient.current = new VariableSolverClient());
       const problemJson =
         inputMode === "form" ? generatedProblem : manualProblem;
-      const json = await client.solve(problemJson, maxSolutions);
+      const json = await client.solve(
+        problemJson,
+        maxSolutions,
+        hideRedundantDefenses,
+      );
       if (json !== undefined) {
         const problem: unknown = JSON.parse(problemJson);
         if (!isProblemDocument(problem)) {
@@ -606,136 +497,186 @@ export function VariableSolver() {
       >
         <h2 className="h5 mb-0">覆面駒</h2>
         <span className="text-secondary">
-          {open ? <BsChevronUp aria-hidden="true" /> : <BsChevronDown aria-hidden="true" />}
+          {open ? (
+            <BsChevronUp aria-hidden="true" />
+          ) : (
+            <BsChevronDown aria-hidden="true" />
+          )}
         </span>
       </Card.Header>
-      {open && <Card.Body>
-        <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
-          <ButtonGroup aria-label="問題入力方法">
-            <Button
-              variant={inputMode === "form" ? "primary" : "outline-primary"}
-              onClick={() => selectMode("form")}
-            >
-              盤面・フォーム
-            </Button>
-            <Button
-              variant={inputMode === "json" ? "primary" : "outline-primary"}
-              onClick={() => selectMode("json")}
-            >
-              JSON詳細編集
-            </Button>
-          </ButtonGroup>
-        </div>
+      {open && (
+        <Card.Body>
+          <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <ButtonGroup aria-label="問題入力方法">
+              <Button
+                variant={inputMode === "form" ? "primary" : "outline-primary"}
+                onClick={() => selectMode("form")}
+              >
+                盤面・フォーム
+              </Button>
+              <Button
+                variant={inputMode === "json" ? "primary" : "outline-primary"}
+                onClick={() => selectMode("json")}
+              >
+                JSON詳細編集
+              </Button>
+            </ButtonGroup>
+          </div>
 
-        {inputMode === "form" ? (
-          <>
-            <Row className="g-4 variable-three-column-layout">
-              <Col xl={4} className="variable-layout-board">
-                <VariablePositionEditor
-                  position={editorState.position}
-                  normalSelected={editorState.selected}
-                  variables={variables}
-                  selected={selected}
-                  clickBoard={clickBoard}
-                  rightClickBoard={rightClickBoard}
-                  clickKnownHand={clickKnownHand}
-                  moveSelectedToHand={moveSelectedToHand}
-                  selectVariable={selectVariable}
-                  shiftBoard={shiftBoard}
-                />
-              </Col>
-              <Col xl={4} className="variable-layout-settings">
-                <Form.Group className="mb-3" controlId="variable-base-sfen">
-                  <Form.Label>通常駒のbase SFEN</Form.Label>
-                  <div className="d-flex gap-2">
-                    <Form.Control
-                      className="variable-sfen-input"
-                      size="sm"
-                      value={sfenInput}
-                      onChange={(event) => setSfenInput(event.target.value)}
-                      spellCheck={false}
-                    />
+          {inputMode === "form" ? (
+            <>
+              <Row className="g-4 variable-three-column-layout">
+                <Col xl={4} className="variable-layout-board">
+                  <VariablePositionEditor
+                    position={editorState.position}
+                    normalSelected={editorState.selected}
+                    variables={variables}
+                    selected={selected}
+                    clickBoard={clickBoard}
+                    rightClickBoard={rightClickBoard}
+                    clickKnownHand={clickKnownHand}
+                    moveSelectedToHand={moveSelectedToHand}
+                    selectVariable={selectVariable}
+                    shiftBoard={shiftBoard}
+                  />
+                </Col>
+                <Col xl={4} className="variable-layout-settings">
+                  <Form.Group className="mb-3" controlId="variable-base-sfen">
+                    <Form.Label>通常駒のbase SFEN</Form.Label>
+                    <div className="d-flex gap-2">
+                      <Form.Control
+                        className="variable-sfen-input"
+                        size="sm"
+                        value={sfenInput}
+                        onChange={(event) => setSfenInput(event.target.value)}
+                        spellCheck={false}
+                      />
+                      <Button
+                        className="text-nowrap"
+                        size="sm"
+                        variant="outline-secondary"
+                        onClick={loadSfen}
+                      >
+                        読込
+                      </Button>
+                    </div>
+                  </Form.Group>
+                  <div
+                    className="d-flex flex-wrap gap-2 mb-3"
+                    aria-label="覆面駒の初形プリセット"
+                  >
                     <Button
-                      className="text-nowrap"
                       size="sm"
                       variant="outline-secondary"
-                      onClick={loadSfen}
+                      onClick={() => loadPositionPreset(singleKingBaseSfen)}
+                      disabled={solving}
                     >
-                      読込
+                      単玉のみ
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline-secondary"
+                      onClick={() => loadPositionPreset(doubleKingBaseSfen)}
+                      disabled={solving}
+                    >
+                      双玉のみ
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline-secondary"
+                      onClick={() => loadPositionPreset(allPiecesInBoxBaseSfen)}
+                      disabled={solving}
+                    >
+                      すべて駒箱
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline-secondary"
+                      onClick={() =>
+                        applyProblemToForm(
+                          buildProblemDocument(
+                            initialBaseSfen,
+                            initialPlies,
+                            initialVariables,
+                            initialRule,
+                            initialHandVariableMode,
+                          ),
+                        )
+                      }
+                      disabled={solving}
+                    >
+                      サンプル
                     </Button>
                   </div>
-                </Form.Group>
-                <VariableSavedPositions
-                  positions={savedPositions}
-                  defaultName={baseSfen}
-                  disabled={solving}
-                  onSave={saveCurrentPosition}
-                  onLoad={(position) => applyProblemToForm(position.problem)}
-                  onDelete={deleteSavedPosition}
+                  <VariableControls
+                    variables={variables}
+                    selected={selected}
+                    setSelectedId={selectVariable}
+                    removeVariable={removeVariable}
+                    addVariableToHand={addVariableToHand}
+                  />
+                </Col>
+                <Col xl={4} className="variable-layout-results">
+                  <VariableSolveControls
+                    plies={plies}
+                    setPlies={setPlies}
+                    rule={rule}
+                    setRule={setRule}
+                    handVariableMode={handVariableMode}
+                    setHandVariableMode={changeHandVariableMode}
+                    maxSolutions={maxSolutions}
+                    setMaxSolutions={setMaxSolutions}
+                    hideRedundantDefenses={hideRedundantDefenses}
+                    setHideRedundantDefenses={changeHideRedundantDefenses}
+                    solving={solving}
+                    onSolve={solve}
+                  />
+                  {error && <Alert variant="danger">{error}</Alert>}
+                  {result && <VariableResult {...result} />}
+                </Col>
+              </Row>
+            </>
+          ) : (
+            <div>
+              <Form.Group className="mb-2" controlId="variable-problem-json">
+                <Form.Label>問題JSON</Form.Label>
+                <Form.Control
+                  as="textarea"
+                  className="variable-problem-json"
+                  value={manualProblem}
+                  onChange={(event) => {
+                    setManualProblem(event.target.value);
+                    clearResult();
+                  }}
+                  spellCheck={false}
                 />
-                <VariableControls
-                  variables={variables}
-                  selected={selected}
-                  setSelectedId={selectVariable}
-                  removeVariable={removeVariable}
-                  addVariableToHand={addVariableToHand}
-                />
-              </Col>
-              <Col xl={4} className="variable-layout-results">
-                <VariableSolveControls
-                  plies={plies}
-                  setPlies={setPlies}
-                  rule={rule}
-                  setRule={setRule}
-                  handVariableMode={handVariableMode}
-                  setHandVariableMode={changeHandVariableMode}
-                  maxSolutions={maxSolutions}
-                  setMaxSolutions={setMaxSolutions}
-                  solving={solving}
-                  onSolve={solve}
-                />
-                {error && <Alert variant="danger">{error}</Alert>}
-                {result && <VariableResult {...result} />}
-              </Col>
-            </Row>
-          </>
-        ) : (
-          <div>
-            <Form.Group className="mb-2" controlId="variable-problem-json">
-              <Form.Label>問題JSON</Form.Label>
-              <Form.Control
-                as="textarea"
-                className="variable-problem-json"
-                value={manualProblem}
-                onChange={(event) => {
-                  setManualProblem(event.target.value);
-                  clearResult();
-                }}
-                spellCheck={false}
-              />
-            </Form.Group>
-            <div className="d-flex flex-wrap gap-2">
-              <Button variant="outline-secondary" onClick={loadJsonIntoForm}>
-                JSONをフォームに反映
-              </Button>
-              <CopyButton text={manualProblem} idleLabel="問題JSONをコピー" />
+              </Form.Group>
+              <div className="d-flex flex-wrap gap-2">
+                <Button variant="outline-secondary" onClick={loadJsonIntoForm}>
+                  JSONをフォームに反映
+                </Button>
+                <CopyButton text={manualProblem} idleLabel="問題JSONをコピー" />
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {inputMode === "json" && (
-          <div className="my-3">
-            <VariableSolveControls
-              maxSolutions={maxSolutions}
-              setMaxSolutions={setMaxSolutions}
-              solving={solving}
-              onSolve={solve}
-            />
-            {error && <Alert variant="danger">{error}</Alert>}
-            {result && <VariableResult {...result} />}
-          </div>
-        )}
-      </Card.Body>}
+          {inputMode === "json" && (
+            <div className="my-3">
+              <VariableSolveControls
+                maxSolutions={maxSolutions}
+                setMaxSolutions={setMaxSolutions}
+                bestMateOptions={manualRule === "bestMate"}
+                hideRedundantDefenses={hideRedundantDefenses}
+                setHideRedundantDefenses={changeHideRedundantDefenses}
+                solving={solving}
+                onSolve={solve}
+              />
+              {error && <Alert variant="danger">{error}</Alert>}
+              {result && <VariableResult {...result} />}
+            </div>
+          )}
+        </Card.Body>
+      )}
     </Card>
   );
 }
@@ -763,103 +704,6 @@ function VariablePieceBox(props: {
         selected={selectedKind}
         onClick={props.onClick}
       />
-    </div>
-  );
-}
-
-function VariableSavedPositions(props: {
-  positions: SavedVariableProblem[];
-  defaultName: string;
-  disabled: boolean;
-  onSave: (name: string) => void;
-  onLoad: (position: SavedVariableProblem) => void;
-  onDelete: (index: number) => void;
-}) {
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const startAdding = () => {
-    setName(props.defaultName);
-    setAdding(true);
-    setTimeout(() => inputRef.current?.select(), 0);
-  };
-  const confirmAdd = () => {
-    props.onSave(name);
-    setAdding(false);
-  };
-
-  return (
-    <div className="variable-saved-positions border rounded p-3 mb-3">
-      <div className="d-flex align-items-center gap-2 mb-2">
-        <h3 className="h6 mb-0">保存局面</h3>
-        {!adding && (
-          <Button
-            aria-label="現在の局面を保存"
-            size="sm"
-            variant="secondary"
-            onClick={startAdding}
-            disabled={props.disabled}
-          >
-            ＋
-          </Button>
-        )}
-      </div>
-      {adding && (
-        <div className="d-flex gap-1 mb-2">
-          <Form.Control
-            ref={inputRef}
-            aria-label="保存名"
-            size="sm"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") confirmAdd();
-              if (event.key === "Escape") setAdding(false);
-            }}
-          />
-          <Button size="sm" onClick={confirmAdd}>
-            保存
-          </Button>
-          <Button
-            aria-label="保存をキャンセル"
-            size="sm"
-            variant="outline-secondary"
-            onClick={() => setAdding(false)}
-          >
-            ×
-          </Button>
-        </div>
-      )}
-      {props.positions.length === 0 ? (
-        <div className="small text-muted">保存された局面はありません。</div>
-      ) : (
-        <div className="d-grid gap-1">
-          {props.positions.map((position, index) => (
-            <div className="d-flex gap-1" key={`${index}-${position.name}`}>
-              <Button
-                className="flex-grow-1 text-start text-truncate"
-                size="sm"
-                variant="outline-secondary"
-                title={position.name}
-                onClick={() => props.onLoad(position)}
-                disabled={props.disabled}
-              >
-                {position.name}
-              </Button>
-              <Button
-                aria-label={`${position.name}を削除`}
-                size="sm"
-                variant="outline-danger"
-                onClick={() => props.onDelete(index)}
-                disabled={props.disabled}
-              >
-                ×
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -1161,6 +1005,9 @@ export function VariableSolveControls(props: {
   setHandVariableMode?: (mode: HandVariableMode) => void;
   maxSolutions: number;
   setMaxSolutions: (maxSolutions: number) => void;
+  bestMateOptions?: boolean;
+  hideRedundantDefenses?: boolean;
+  setHideRedundantDefenses?: (hide: boolean) => void;
   solving: boolean;
   onSolve: () => void;
 }) {
@@ -1196,6 +1043,24 @@ export function VariableSolveControls(props: {
           </Form.Select>
         </Form.Group>
       )}
+      {(props.rule === "bestMate" || props.bestMateOptions) &&
+        props.hideRedundantDefenses !== undefined &&
+        props.setHideRedundantDefenses && (
+          <Form.Group
+            className="variable-solve-group"
+            controlId={`${idPrefix}-hide-redundant-defenses`}
+          >
+            <Form.Check
+              type="checkbox"
+              label="同手数駒余りの変化を表示しない"
+              checked={props.hideRedundantDefenses}
+              onChange={(event) =>
+                props.setHideRedundantDefenses!(event.target.checked)
+              }
+              disabled={props.solving}
+            />
+          </Form.Group>
+        )}
       {props.handVariableMode !== undefined && props.setHandVariableMode && (
         <Form.Group
           className="variable-solve-group variable-hand-mode"
@@ -1316,8 +1181,7 @@ function VariableResult(props: VariableSolveResult) {
           ? "協力自玉詰"
           : bestMate
             ? "最善詰"
-            : "協力詰"}
-        {" "}
+            : "協力詰"}{" "}
         {bestMate
           ? props.response.bestMateIn !== undefined
             ? `${props.response.bestMateIn}手（上限${props.plies}手）`

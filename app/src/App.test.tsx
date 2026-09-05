@@ -100,7 +100,8 @@ test("renders HiddenMate title", () => {
     screen.queryByText(/通常駒は盤面・駒台をクリックして移動できます/),
   ).toBeNull();
   expect(screen.getByRole("button", { name: "検討" })).not.toBeNull();
-  expect(screen.getByRole("heading", { name: "保存局面" })).not.toBeNull();
+  expect(screen.queryByRole("heading", { name: "保存局面" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "現在の局面を保存" })).toBeNull();
   expect(screen.queryByRole("heading", { name: "通常協力詰" })).toBeNull();
   fireEvent.click(variableHeading);
   expect(
@@ -113,7 +114,9 @@ test("renders HiddenMate title", () => {
 
 test("configures at most two known-kind invisible pieces", () => {
   const { container } = render(<App />);
-  expect((screen.getByLabelText("最大解数") as HTMLInputElement).value).toBe("20");
+  expect((screen.getByLabelText("最大解数") as HTMLInputElement).value).toBe(
+    "20",
+  );
   const openButton = screen.getByRole("button", {
     name: "透明駒（駒種指定）の入力を開く",
   });
@@ -146,7 +149,9 @@ test("configures at most two known-kind invisible pieces", () => {
     "協力自玉詰",
   ]);
   expect(rule.value).toBe("helpmate");
-  expect((panel.getByLabelText("最大解数") as HTMLInputElement).value).toBe("20");
+  expect((panel.getByLabelText("最大解数") as HTMLInputElement).value).toBe(
+    "20",
+  );
   expect(panel.queryByText("最大手数")).toBeNull();
   expect(panel.getByRole("button", { name: "双玉のみ" })).not.toBeNull();
   expect(
@@ -157,7 +162,9 @@ test("configures at most two known-kind invisible pieces", () => {
   expect(
     (panel.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
   ).toBe("4k4/9/9/9/9/9/9/9/4K4 b 2r2b4g4s4n4l18p 1");
-  expect(solver.querySelector(".variable-piece-box")?.textContent).toContain("なし");
+  expect(solver.querySelector(".variable-piece-box")?.textContent).toContain(
+    "なし",
+  );
   const owner = panel.getByLabelText("所属");
   const kind = panel.getByLabelText("駒種");
   const add = panel.getByRole("button", { name: "透明駒を追加" });
@@ -230,9 +237,7 @@ test("shows known invisible rule, plies, and piece summary above counts", async 
   ).not.toBe(0);
   expect(countsSummary.textContent).toContain("71");
   expect(countsSummary.textContent).toContain("6");
-  expect(
-    panel.getByText("13玉 23歩 同X 11玉 22香成 まで 5手"),
-  ).not.toBeNull();
+  expect(panel.getByText("13玉 23歩 同X 11玉 22香成 まで 5手")).not.toBeNull();
 });
 
 test("places the editor, variable controls, and solve results in three columns", () => {
@@ -255,11 +260,11 @@ test("places the editor, variable controls, and solve results in three columns",
   expect(columns[1].contains(panel)).toBe(true);
   expect(columns[2].contains(solveControls)).toBe(true);
   const baseSfen = screen.getByLabelText("通常駒のbase SFEN");
-  const savedPositions = container.querySelector(".variable-saved-positions");
+  const presets = screen.getByLabelText("覆面駒の初形プリセット");
   expect(columns[1].contains(baseSfen)).toBe(true);
   expect(
     Boolean(
-      baseSfen.compareDocumentPosition(savedPositions!) &
+      baseSfen.compareDocumentPosition(presets) &
       Node.DOCUMENT_POSITION_FOLLOWING,
     ),
   ).toBe(true);
@@ -286,7 +291,9 @@ test("starts with the help-selfmate sample", () => {
   expect(screen.getByLabelText("56 V4")).not.toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "JSON詳細編集" }));
   expect(
-    JSON.parse((screen.getByLabelText("問題JSON") as HTMLTextAreaElement).value),
+    JSON.parse(
+      (screen.getByLabelText("問題JSON") as HTMLTextAreaElement).value,
+    ),
   ).toEqual({
     baseSfen: "9/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1",
     plies: 4,
@@ -385,38 +392,36 @@ test("shifts standard and variable pieces together", () => {
   expect(screen.getByLabelText("14").textContent).not.toContain("V1");
 });
 
-test("saves the current variable position with a name", () => {
-  render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: "現在の局面を保存" }));
-  fireEvent.change(screen.getByLabelText("保存名"), {
-    target: { value: "テスト局面" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "保存" }));
-
-  expect(screen.getByRole("button", { name: "テスト局面" })).not.toBeNull();
-  expect(localStorage.getItem("hiddenmate_variable_saved_positions")).toContain(
-    "テスト局面",
-  );
-});
-
-test("loads the default single-king position from saved positions", () => {
+test("loads the single-king preset without changing solve settings", () => {
   const { container } = render(<App />);
+  fireEvent.change(screen.getByLabelText("ルール"), {
+    target: { value: "bestMate" },
+  });
+  fireEvent.change(screen.getByLabelText("手数"), { target: { value: "7" } });
+  fireEvent.click(screen.getByLabelText("区別する"));
   fireEvent.click(screen.getByRole("button", { name: "単玉のみ" }));
 
   expect(
     (screen.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
   ).toBe("4k4/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1");
-  expect(container.querySelector(".variable-piece")).toBeNull();
+  expect((screen.getByLabelText("ルール") as HTMLSelectElement).value).toBe(
+    "bestMate",
+  );
+  expect((screen.getByLabelText("手数") as HTMLInputElement).value).toBe("7");
+  expect((screen.getByLabelText("区別する") as HTMLInputElement).checked).toBe(
+    true,
+  );
+  expect(container.querySelectorAll(".variable-piece")).toHaveLength(4);
 });
 
-test("loads the all-pieces-in-box position from saved positions", () => {
+test("loads the all-pieces-in-box preset without removing variables", () => {
   const { container } = render(<App />);
   fireEvent.click(screen.getByRole("button", { name: "すべて駒箱" }));
 
   expect(
     (screen.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
   ).toBe("9/9/9/9/9/9/9/9/9 b - 1");
-  expect(container.querySelector(".variable-piece")).toBeNull();
+  expect(container.querySelectorAll(".variable-piece")).toHaveLength(4);
   expect(container.querySelector(".variable-piece-box")?.textContent).toContain(
     "玉2",
   );
@@ -428,7 +433,7 @@ test("loads the all-pieces-in-box position from saved positions", () => {
   );
 });
 
-test("loads the sample below the all-pieces-in-box position", () => {
+test("loads the sample after the all-pieces-in-box preset", () => {
   render(<App />);
   const allPiecesInBox = screen.getByRole("button", { name: "すべて駒箱" });
   const sample = screen.getByRole("button", { name: "サンプル" });
@@ -436,7 +441,7 @@ test("loads the sample below the all-pieces-in-box position", () => {
   expect(
     Boolean(
       allPiecesInBox.compareDocumentPosition(sample) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      Node.DOCUMENT_POSITION_FOLLOWING,
     ),
   ).toBe(true);
   fireEvent.click(allPiecesInBox);
@@ -453,46 +458,6 @@ test("loads the sample below the all-pieces-in-box position", () => {
   expect(screen.getByLabelText("26 V2")).not.toBeNull();
   expect(screen.getByLabelText("33 V3")).not.toBeNull();
   expect(screen.getByLabelText("56 V4")).not.toBeNull();
-});
-
-test("migrates saved positions while refreshing built-in defaults", () => {
-  localStorage.setItem(
-    "hiddenmate_variable_saved_positions",
-    JSON.stringify({
-      version: 2,
-      positions: [
-        {
-          name: "単玉のみ",
-          problem: {
-            baseSfen: "9/9/9/9/9/9/9/9/9 b - 1",
-            plies: 1,
-            variables: [],
-          },
-        },
-        {
-          name: "ユーザー局面",
-          problem: {
-            baseSfen: "4k4/9/9/9/9/9/9/9/9 b - 1",
-            plies: 1,
-            variables: [],
-          },
-        },
-      ],
-    }),
-  );
-
-  render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: "単玉のみ" }));
-
-  expect(
-    (screen.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
-  ).toBe("4k4/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1");
-  expect(screen.getByRole("button", { name: "ユーザー局面" })).not.toBeNull();
-  expect(screen.getByRole("button", { name: "すべて駒箱" })).not.toBeNull();
-  expect(screen.getByRole("button", { name: "サンプル" })).not.toBeNull();
-  expect(localStorage.getItem("hiddenmate_variable_saved_positions")).toContain(
-    '"version":3',
-  );
 });
 
 test("keeps a newly added variable unselected", () => {
@@ -674,6 +639,28 @@ test("can select best mate in variable problems", () => {
   ).toContain('"rule": "bestMate"');
 });
 
+test("shows the redundant-defense option only for best mate", () => {
+  render(<App />);
+  const label = "同手数駒余りの変化を表示しない";
+
+  expect(screen.queryByLabelText(label)).toBeNull();
+  fireEvent.change(screen.getByLabelText("ルール"), {
+    target: { value: "bestMate" },
+  });
+  const checkbox = screen.getByLabelText(label) as HTMLInputElement;
+  expect(checkbox.checked).toBe(false);
+  fireEvent.click(checkbox);
+  expect(checkbox.checked).toBe(true);
+
+  fireEvent.click(screen.getByRole("button", { name: "検討" }));
+  act(() => {
+    workerInstances[0].onmessage?.({ data: { type: "ready" } } as MessageEvent);
+  });
+  expect(workerInstances[0].postMessage).toHaveBeenCalledWith(
+    expect.objectContaining({ hideRedundantDefenses: true }),
+  );
+});
+
 test("shows best-mate results as ordinary numbered answers", async () => {
   const { container } = render(<App />);
   fireEvent.change(screen.getByLabelText("ルール"), {
@@ -817,10 +804,7 @@ test("shows candidates after a clicked solution move", async () => {
           candidates: [{ id: 1, kinds: ["R", "+R"] }],
           solutions: [["84▲(64)", "83玉"]],
           solutionCandidates: [
-            [
-              [{ id: 1, kinds: ["R"] }],
-              [{ id: 1, kinds: ["+R"] }],
-            ],
+            [[{ id: 1, kinds: ["R"] }], [{ id: 1, kinds: ["+R"] }]],
           ],
         }),
       },
@@ -831,9 +815,7 @@ test("shows candidates after a clicked solution move", async () => {
   const table = container.querySelector(".variable-result-table")!;
   expect(within(table as HTMLElement).getByText("飛、龍")).not.toBeNull();
 
-  fireEvent.click(
-    screen.getByRole("button", { name: "解1の1手目 84▲(64)" }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "解1の1手目 84▲(64)" }));
   expect(
     within(table as HTMLElement).getByText("駒種候補（解1：1手目指了図）"),
   ).not.toBeNull();
@@ -848,6 +830,8 @@ test("shows candidates after a clicked solution move", async () => {
   fireEvent.click(
     screen.getByRole("button", { name: "駒種候補（初形）に戻す" }),
   );
-  expect(within(table as HTMLElement).getByText("駒種候補（初形）")).not.toBeNull();
+  expect(
+    within(table as HTMLElement).getByText("駒種候補（初形）"),
+  ).not.toBeNull();
   expect(within(table as HTMLElement).getByText("飛、龍")).not.toBeNull();
 });

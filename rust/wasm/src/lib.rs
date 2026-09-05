@@ -6,9 +6,9 @@ use std::collections::BTreeMap;
 
 use fmrs_core::piece::Kind;
 use hiddenmate_core::{
-    format_known_invisible_solution_japanese, format_solution_japanese, solve_best_mate,
-    solve_exact, solve_known_invisible_exact, HiddenState, KnownInvisibleDocument, MateRule,
-    ObservedMove, ProblemDocument, Solution,
+    format_known_invisible_solution_japanese, format_solution_japanese,
+    solve_best_mate_with_options, solve_exact, solve_known_invisible_exact, BestMateOptions,
+    HiddenState, KnownInvisibleDocument, MateRule, ObservedMove, ProblemDocument, Solution,
 };
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
@@ -73,12 +73,25 @@ struct VariableCandidates {
 
 /// 覆面駒問題JSONを解き、Web UI向けのJSONを返す。
 #[wasm_bindgen]
-pub fn solve_variable_problem(json: &str, max_solutions: u32) -> Result<String, JsValue> {
-    solve_variable_problem_json(json, max_solutions as usize)
+pub fn solve_variable_problem(
+    json: &str,
+    max_solutions: u32,
+    hide_redundant_defenses: bool,
+) -> Result<String, JsValue> {
+    solve_variable_problem_json_with_options(json, max_solutions as usize, hide_redundant_defenses)
         .map_err(|error| JsValue::from_str(&format!("{error:#}")))
 }
 
+#[cfg(test)]
 fn solve_variable_problem_json(json: &str, max_solutions: usize) -> anyhow::Result<String> {
+    solve_variable_problem_json_with_options(json, max_solutions, false)
+}
+
+fn solve_variable_problem_json_with_options(
+    json: &str,
+    max_solutions: usize,
+    hide_redundant_defenses: bool,
+) -> anyhow::Result<String> {
     let document = ProblemDocument::from_json(json)?;
     let plies = document.plies;
     let (problem, hand_variable_mode) = document.into_problem_with_hand_variable_mode()?;
@@ -86,7 +99,14 @@ fn solve_variable_problem_json(json: &str, max_solutions: usize) -> anyhow::Resu
     let candidates = variable_candidates(&state);
     let (raw_solutions, best_mate_in, variations_truncated) = if state.rule() == MateRule::BestMate
     {
-        match solve_best_mate(&state, plies, max_solutions)? {
+        match solve_best_mate_with_options(
+            &state,
+            plies,
+            max_solutions,
+            BestMateOptions {
+                hide_redundant_defenses,
+            },
+        )? {
             Some(result) => (
                 result.variations,
                 Some(result.mate_in),
@@ -309,6 +329,33 @@ mod hiddenmate_tests {
             .unwrap()
             .iter()
             .all(|line| line.as_array().unwrap().len() == 1));
+    }
+
+    #[test]
+    fn best_mate_web_option_hides_only_redundant_defense_branches() {
+        let json = r#"{
+            "baseSfen": "9/9/9/9/9/9/6S1p/8k/9 b 2r2b4g3s4n4l17p 1",
+            "plies": 5,
+            "rule": "bestMate",
+            "handVariableMode": "indistinguishable",
+            "variables": [{ "id": 1, "color": "black", "square": "39" }]
+        }"#;
+
+        let all: serde_json::Value = serde_json::from_str(
+            &solve_variable_problem_json_with_options(json, 10_000, false).unwrap(),
+        )
+        .unwrap();
+        let filtered: serde_json::Value = serde_json::from_str(
+            &solve_variable_problem_json_with_options(json, 10_000, true).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(filtered["bestMateIn"], all["bestMateIn"]);
+        assert!(
+            filtered["solutions"].as_array().unwrap().len()
+                < all["solutions"].as_array().unwrap().len()
+        );
+        assert!(!filtered["solutions"].as_array().unwrap().is_empty());
     }
 
     #[test]

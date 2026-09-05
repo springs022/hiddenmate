@@ -19,6 +19,7 @@ export class VariableSolverClient {
   solve(
     problemJson: string,
     maxSolutions: number,
+    hideRedundantDefenses: boolean,
   ): Promise<string | undefined> {
     if (this.pending) {
       throw new Error("検討は既に実行中です。");
@@ -31,6 +32,7 @@ export class VariableSolverClient {
       requestId,
       problemJson,
       maxSolutions,
+      hideRedundantDefenses,
     };
 
     return new Promise((resolve, reject) => {

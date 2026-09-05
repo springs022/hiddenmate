@@ -181,6 +181,13 @@ impl HiddenState {
         })
     }
 
+    /// すべての候補世界で攻方の持駒が空かを返す。
+    pub(crate) fn attacker_hand_is_empty(&self) -> bool {
+        self.worlds
+            .iter()
+            .all(|world| world.position().hands().is_empty(Color::BLACK))
+    }
+
     /// 最善詰探索の置換表で使う、候補世界と観測状態を含む完全なキー。
     pub(crate) fn search_key(&self) -> String {
         let mut worlds = self

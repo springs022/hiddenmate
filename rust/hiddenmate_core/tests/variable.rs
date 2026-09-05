@@ -3,9 +3,9 @@ use fmrs_core::{
     position::Square,
 };
 use hiddenmate_core::{
-    format_solution_japanese, solve_best_mate, solve_exact, DropIdentity, HandVariableMode,
-    MateRule, MoveIdentity, ObservedMove, VariableId, VariableLocation, VariableProblem,
-    VariableSpec,
+    format_solution_japanese, solve_best_mate, solve_best_mate_with_options, solve_exact,
+    BestMateOptions, DropIdentity, HandVariableMode, MateRule, MoveIdentity, ObservedMove,
+    VariableId, VariableLocation, VariableProblem, VariableSpec,
 };
 
 fn square(file: usize, rank: usize) -> Square {
@@ -422,6 +422,85 @@ fn best_mate_displays_only_longest_defenses() {
         .iter()
         .map(|line| format_solution_japanese(&state, line).join(" "))
         .all(|line| !line.starts_with("48▲(39) 28歩打 同龍")));
+}
+
+#[test]
+fn best_mate_can_hide_same_length_surplus_defenses() {
+    use std::collections::BTreeMap;
+
+    let state = VariableProblem {
+        base_sfen: "9/9/9/9/9/9/6S1p/8k/9 b 2r2b4g3s4n4l17p 1".to_string(),
+        rule: MateRule::BestMate,
+        variables: vec![VariableSpec {
+            id: VariableId(1),
+            color: Color::BLACK,
+            location: VariableLocation::Board(square(3, 9)),
+            candidates: fmrs_core::piece::KINDS.to_vec(),
+        }],
+    }
+    .enumerate_with_hand_variable_mode(HandVariableMode::Indistinguishable)
+    .unwrap();
+
+    let all = solve_best_mate(&state, 5, 10_000).unwrap().unwrap();
+    let filtered = solve_best_mate_with_options(
+        &state,
+        5,
+        10_000,
+        BestMateOptions {
+            hide_redundant_defenses: true,
+        },
+    )
+    .unwrap()
+    .unwrap();
+    let terminal_has_no_surplus = |line: &[ObservedMove]| {
+        let terminal = line.iter().fold(state.clone(), |current, &movement| {
+            current.apply(movement).unwrap()
+        });
+        terminal.worlds().iter().all(|world| {
+            world
+                .position()
+                .hands()
+                .is_empty(fmrs_core::piece::Color::BLACK)
+        })
+    };
+    let mut all_defenses = BTreeMap::<ObservedMove, (bool, usize)>::new();
+    for line in &all.variations {
+        let terminal_has_no_surplus = terminal_has_no_surplus(line);
+        all_defenses
+            .entry(line[1])
+            .and_modify(|(all_have_no_surplus, count)| {
+                *all_have_no_surplus &= terminal_has_no_surplus;
+                *count += 1;
+            })
+            .or_insert((terminal_has_no_surplus, 1));
+    }
+    let mut filtered_defenses = BTreeMap::<ObservedMove, usize>::new();
+    for line in &filtered.variations {
+        *filtered_defenses.entry(line[1]).or_default() += 1;
+    }
+
+    assert_eq!(filtered.mate_in, all.mate_in);
+    assert!(filtered.variations.len() < all.variations.len());
+    assert!(all_defenses
+        .values()
+        .any(|&(all_have_no_surplus, _)| all_have_no_surplus));
+    assert!(all_defenses
+        .values()
+        .any(|&(all_have_no_surplus, _)| !all_have_no_surplus));
+    assert!(all_defenses
+        .iter()
+        .all(|(defense, &(all_have_no_surplus, _))| {
+            filtered_defenses.contains_key(defense) == all_have_no_surplus
+        }));
+    assert!(filtered
+        .variations
+        .iter()
+        .all(|line| terminal_has_no_surplus(line)));
+    assert!(filtered
+        .variations
+        .iter()
+        .map(|line| format_solution_japanese(&state, line).join(" "))
+        .all(|line| !line.starts_with("48▲(39) 38金打")));
 }
 
 #[test]

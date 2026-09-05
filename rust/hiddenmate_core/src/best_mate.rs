@@ -16,7 +16,15 @@ pub struct BestMateResult {
     pub variations_truncated: bool,
 }
 
+/// 最善詰の変化表示に関する設定。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct BestMateOptions {
+    /// 最長手数になる受方応手のうち、いずれかの最善手順で攻方に持駒が残る分岐を省く。
+    pub hide_redundant_defenses: bool,
+}
+
 type DistanceMemo = HashMap<(String, usize), Option<usize>>;
+type NoSurplusMemo = HashMap<(String, usize, usize), bool>;
 
 /// 指定手数以内の最善詰を検討する。
 ///
@@ -27,6 +35,16 @@ pub fn solve_best_mate(
     initial: &HiddenState,
     plies: usize,
     max_variations: usize,
+) -> Result<Option<BestMateResult>> {
+    solve_best_mate_with_options(initial, plies, max_variations, BestMateOptions::default())
+}
+
+/// 表示設定を指定して、指定手数以内の最善詰を検討する。
+pub fn solve_best_mate_with_options(
+    initial: &HiddenState,
+    plies: usize,
+    max_variations: usize,
+    options: BestMateOptions,
 ) -> Result<Option<BestMateResult>> {
     if initial.rule() != MateRule::BestMate {
         bail!("最善詰以外の状態が最善詰ソルバーへ渡されました");
@@ -39,6 +57,7 @@ pub fn solve_best_mate(
 
     let mut variations = Vec::new();
     let mut path = Vec::with_capacity(mate_in);
+    let mut no_surplus_memo = NoSurplusMemo::new();
     let variations_truncated = collect_variations(
         initial,
         plies,
@@ -47,6 +66,8 @@ pub fn solve_best_mate(
         &mut path,
         &mut variations,
         &mut memo,
+        &mut no_surplus_memo,
+        options,
     );
 
     Ok(Some(BestMateResult {
@@ -116,6 +137,8 @@ fn collect_variations(
     path: &mut Solution,
     variations: &mut Vec<Solution>,
     memo: &mut DistanceMemo,
+    no_surplus_memo: &mut NoSurplusMemo,
+    options: BestMateOptions,
 ) -> bool {
     if distance == 0 {
         if variations.len() < max_variations {
@@ -136,6 +159,18 @@ fn collect_variations(
         if child_distance + 1 != distance {
             continue;
         }
+        if options.hide_redundant_defenses
+            && state.turn() == Color::WHITE
+            && !all_optimal_variations_have_no_surplus(
+                &next,
+                remaining - 1,
+                child_distance,
+                memo,
+                no_surplus_memo,
+            )
+        {
+            continue;
+        }
 
         path.push(observed);
         let truncated = collect_variations(
@@ -146,6 +181,8 @@ fn collect_variations(
             path,
             variations,
             memo,
+            no_surplus_memo,
+            options,
         );
         path.pop();
         if truncated {
@@ -153,6 +190,52 @@ fn collect_variations(
         }
     }
     false
+}
+
+/// 最善手だけをたどるすべての詰上がりで、攻方の持駒が残らないか調べる。
+fn all_optimal_variations_have_no_surplus(
+    state: &HiddenState,
+    remaining: usize,
+    distance: usize,
+    distance_memo: &mut DistanceMemo,
+    memo: &mut NoSurplusMemo,
+) -> bool {
+    if distance == 0 {
+        return state.is_proven_mate() && state.attacker_hand_is_empty();
+    }
+
+    let key = (state.search_key(), remaining, distance);
+    if let Some(&cached) = memo.get(&key) {
+        return cached;
+    }
+
+    let mut has_optimal_child = false;
+    let mut result = true;
+    for observed in state.observed_moves() {
+        let Some(next) = state.apply(observed) else {
+            continue;
+        };
+        let Some(child_distance) = best_mate_distance(&next, remaining - 1, distance_memo) else {
+            continue;
+        };
+        if child_distance + 1 != distance {
+            continue;
+        }
+        has_optimal_child = true;
+        if !all_optimal_variations_have_no_surplus(
+            &next,
+            remaining - 1,
+            child_distance,
+            distance_memo,
+            memo,
+        ) {
+            result = false;
+            break;
+        }
+    }
+    result &= has_optimal_child;
+    memo.insert(key, result);
+    result
 }
 
 #[cfg(test)]

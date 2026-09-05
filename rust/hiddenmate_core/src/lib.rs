@@ -14,7 +14,9 @@ mod solver;
 mod state;
 mod world;
 
-pub use best_mate::{solve_best_mate, BestMateResult};
+pub use best_mate::{
+    solve_best_mate, solve_best_mate_with_options, BestMateOptions, BestMateResult,
+};
 pub use format::ProblemDocument;
 pub use known_invisible::{
     format_known_invisible_solution_japanese, solve_known_invisible_exact, KnownInvisibleDocument,

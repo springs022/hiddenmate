@@ -22,6 +22,7 @@ worker.onmessage = (event: MessageEvent<VariableSolveRequest>) => {
       responseJson: solve_variable_problem(
         request.problemJson,
         request.maxSolutions,
+        request.hideRedundantDefenses,
       ),
     };
   } catch (reason) {
