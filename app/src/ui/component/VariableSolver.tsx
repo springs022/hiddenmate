@@ -425,6 +425,7 @@ export function VariableSolver() {
       ty: "set-position",
       position: editablePositionFromBaseSfen(presetBaseSfen),
     });
+    setVariables([]);
     setSelectedId(0);
     clearResult();
   };

@@ -185,6 +185,33 @@ test("configures at most two known-kind invisible pieces", () => {
   expect(problemJson.value).toContain('"kind": "R"');
 });
 
+test.each(["単玉のみ", "双玉のみ", "すべて駒箱"])(
+  "known invisible %s preset removes all invisible pieces and keeps solve settings",
+  (buttonName) => {
+    const { container } = render(<App />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "透明駒（駒種指定）の入力を開く" }),
+    );
+    const panel = within(
+      container.querySelector(".known-invisible-solver") as HTMLElement,
+    );
+    fireEvent.change(panel.getByLabelText("ルール"), {
+      target: { value: "helpSelfmate" },
+    });
+    fireEvent.change(panel.getByLabelText("手数"), { target: { value: "7" } });
+    fireEvent.click(panel.getByRole("button", { name: "透明駒を追加" }));
+
+    expect(panel.getByText("攻方 歩 ×1")).not.toBeNull();
+    fireEvent.click(panel.getByRole("button", { name: buttonName }));
+
+    expect(panel.queryByText("攻方 歩 ×1")).toBeNull();
+    expect((panel.getByLabelText("ルール") as HTMLSelectElement).value).toBe(
+      "helpSelfmate",
+    );
+    expect((panel.getByLabelText("手数") as HTMLInputElement).value).toBe("7");
+  },
+);
+
 test("shows known invisible rule, plies, and piece summary above counts", async () => {
   const { container } = render(<App />);
   fireEvent.click(
@@ -392,46 +419,34 @@ test("shifts standard and variable pieces together", () => {
   expect(screen.getByLabelText("14").textContent).not.toContain("V1");
 });
 
-test("loads the single-king preset without changing solve settings", () => {
-  const { container } = render(<App />);
-  fireEvent.change(screen.getByLabelText("ルール"), {
-    target: { value: "bestMate" },
-  });
-  fireEvent.change(screen.getByLabelText("手数"), { target: { value: "7" } });
-  fireEvent.click(screen.getByLabelText("区別する"));
-  fireEvent.click(screen.getByRole("button", { name: "単玉のみ" }));
+test.each([
+  ["単玉のみ", "4k4/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1"],
+  ["双玉のみ", "4k4/9/9/9/9/9/9/9/4K4 b 2r2b4g4s4n4l18p 1"],
+  ["すべて駒箱", "9/9/9/9/9/9/9/9/9 b - 1"],
+])(
+  "loads the %s preset, removes variables, and keeps solve settings",
+  (buttonName, expectedSfen) => {
+    const { container } = render(<App />);
+    fireEvent.change(screen.getByLabelText("ルール"), {
+      target: { value: "bestMate" },
+    });
+    fireEvent.change(screen.getByLabelText("手数"), { target: { value: "7" } });
+    fireEvent.click(screen.getByLabelText("区別する"));
+    fireEvent.click(screen.getByRole("button", { name: buttonName }));
 
-  expect(
-    (screen.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
-  ).toBe("4k4/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1");
-  expect((screen.getByLabelText("ルール") as HTMLSelectElement).value).toBe(
-    "bestMate",
-  );
-  expect((screen.getByLabelText("手数") as HTMLInputElement).value).toBe("7");
-  expect((screen.getByLabelText("区別する") as HTMLInputElement).checked).toBe(
-    true,
-  );
-  expect(container.querySelectorAll(".variable-piece")).toHaveLength(4);
-});
-
-test("loads the all-pieces-in-box preset without removing variables", () => {
-  const { container } = render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: "すべて駒箱" }));
-
-  expect(
-    (screen.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
-  ).toBe("9/9/9/9/9/9/9/9/9 b - 1");
-  expect(container.querySelectorAll(".variable-piece")).toHaveLength(4);
-  expect(container.querySelector(".variable-piece-box")?.textContent).toContain(
-    "玉2",
-  );
-  expect(container.querySelector(".variable-piece-box")?.textContent).toContain(
-    "飛2",
-  );
-  expect(container.querySelector(".variable-piece-box")?.textContent).toContain(
-    "歩18",
-  );
-});
+    expect(
+      (screen.getByLabelText("通常駒のbase SFEN") as HTMLInputElement).value,
+    ).toBe(expectedSfen);
+    expect((screen.getByLabelText("ルール") as HTMLSelectElement).value).toBe(
+      "bestMate",
+    );
+    expect((screen.getByLabelText("手数") as HTMLInputElement).value).toBe("7");
+    expect(
+      (screen.getByLabelText("区別する") as HTMLInputElement).checked,
+    ).toBe(true);
+    expect(container.querySelectorAll(".variable-piece")).toHaveLength(0);
+  },
+);
 
 test("loads the sample after the all-pieces-in-box preset", () => {
   render(<App />);

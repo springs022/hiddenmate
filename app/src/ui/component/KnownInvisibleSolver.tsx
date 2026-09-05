@@ -124,6 +124,7 @@ export function KnownInvisibleSolver() {
   };
   const loadPreset = (sfen: string) => {
     dispatch({ ty: "set-position", position: decodeSfen(sfen) });
+    setCounts(emptyCounts());
     clear();
   };
   const loadJsonIntoForm = () => {
