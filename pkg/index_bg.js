@@ -301,16 +301,17 @@ export function solve_known_invisible_problem(json, max_solutions) {
  * 覆面駒問題JSONを解き、Web UI向けのJSONを返す。
  * @param {string} json
  * @param {number} max_solutions
+ * @param {boolean} hide_redundant_defenses
  * @returns {string}
  */
-export function solve_variable_problem(json, max_solutions) {
+export function solve_variable_problem(json, max_solutions, hide_redundant_defenses) {
     let deferred3_0;
     let deferred3_1;
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
         const ptr0 = passStringToWasm0(json, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
         const len0 = WASM_VECTOR_LEN;
-        wasm.solve_variable_problem(retptr, ptr0, len0, max_solutions);
+        wasm.solve_variable_problem(retptr, ptr0, len0, max_solutions, hide_redundant_defenses);
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);

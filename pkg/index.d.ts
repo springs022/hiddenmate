@@ -55,4 +55,4 @@ export function solve_known_invisible_problem(json: string, max_solutions: numbe
 /**
  * 覆面駒問題JSONを解き、Web UI向けのJSONを返す。
  */
-export function solve_variable_problem(json: string, max_solutions: number): string;
+export function solve_variable_problem(json: string, max_solutions: number, hide_redundant_defenses: boolean): string;
