@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789182723006,
+  "lastUpdate": 1789185313001,
   "repoUrl": "https://github.com/springs022/hiddenmate",
   "entries": {
     "Instruction Count (iai-callgrind)": [
@@ -3609,6 +3609,58 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/springs022/hiddenmate/commit/65ab2bbae4e4d26600a7239868e543027190211f"
         },
         "date": 1789182718428,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "bench_black_advance",
+            "value": 50875,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_white_advance",
+            "value": 124145,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_reachable",
+            "value": 18369,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_attacker",
+            "value": 122124,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_canonicalize",
+            "value": 2258,
+            "unit": "Instructions"
+          },
+          {
+            "name": "bench_near_mate",
+            "value": 435325904,
+            "unit": "Instructions"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "springs022",
+            "username": "springs022",
+            "email": "hit.and.miss.masayume@gmail.com"
+          },
+          "committer": {
+            "name": "springs022",
+            "username": "springs022",
+            "email": "hit.and.miss.masayume@gmail.com"
+          },
+          "id": "8d7b0983c2b877771f08f16fbee7fd3ef90c6a3c",
+          "message": "最善詰の解表記を統一",
+          "timestamp": "2026-09-12T03:35:34Z",
+          "url": "https://github.com/springs022/hiddenmate/commit/8d7b0983c2b877771f08f16fbee7fd3ef90c6a3c"
+        },
+        "date": 1789185310747,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
