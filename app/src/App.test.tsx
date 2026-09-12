@@ -147,6 +147,7 @@ test("configures at most two known-kind invisible pieces", () => {
   expect(Array.from(rule.options).map((option) => option.text)).toEqual([
     "協力詰",
     "協力自玉詰",
+    "最善詰",
   ]);
   expect(rule.value).toBe("helpmate");
   expect((panel.getByLabelText("最大解数") as HTMLInputElement).value).toBe(
@@ -265,6 +266,48 @@ test("shows known invisible rule, plies, and piece summary above counts", async 
   expect(countsSummary.textContent).toContain("71");
   expect(countsSummary.textContent).toContain("6");
   expect(panel.getByText("13玉 23歩 同X 11玉 22香成 まで 5手")).not.toBeNull();
+});
+
+test("solves known invisible best mate and shows its distance", async () => {
+  const { container } = render(<App />);
+  fireEvent.click(
+    screen.getByRole("button", { name: "透明駒（駒種指定）の入力を開く" }),
+  );
+  const panel = within(
+    container.querySelector(".known-invisible-solver") as HTMLElement,
+  );
+  fireEvent.change(panel.getByLabelText("ルール"), {
+    target: { value: "bestMate" },
+  });
+  fireEvent.click(panel.getByLabelText("同手数駒余りの変化を表示しない"));
+  fireEvent.click(panel.getByRole("button", { name: "検討" }));
+  act(() => {
+    workerInstances[0].onmessage?.({ data: { type: "ready" } } as MessageEvent);
+  });
+  expect(workerInstances[0].postMessage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      maxSolutions: 20,
+      hideRedundantDefenses: true,
+      problemJson: expect.stringContaining('"rule": "bestMate"'),
+    }),
+  );
+  act(() => {
+    workerInstances[0].onmessage?.({
+      data: {
+        type: "solved",
+        requestId: 1,
+        responseJson: JSON.stringify({
+          worldCount: 12,
+          solutions: [["X"]],
+          bestMateIn: 1,
+          variationsTruncated: false,
+        }),
+      },
+    } as MessageEvent);
+  });
+
+  expect(await panel.findByText("最善詰 1手（上限3手）")).not.toBeNull();
+  expect(panel.getByText("X まで 1手")).not.toBeNull();
 });
 
 test("places the editor, variable controls, and solve results in three columns", () => {

@@ -3,6 +3,7 @@ export interface KnownInvisibleSolveRequest {
   requestId: number;
   problemJson: string;
   maxSolutions: number;
+  hideRedundantDefenses: boolean;
 }
 
 export type KnownInvisibleSolveWorkerResponse =

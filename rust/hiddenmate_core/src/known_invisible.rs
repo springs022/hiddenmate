@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use anyhow::{bail, Context, Result};
 use fmrs_core::{
@@ -12,7 +12,7 @@ use fmrs_core::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{DropIdentity, MateRule, MoveIdentity, ObservedMove};
+use crate::{BestMateOptions, DropIdentity, MateRule, MoveIdentity, ObservedMove};
 
 const MAX_KNOWN_INVISIBLES: usize = 2;
 const MAX_WORLDS: usize = 20_000;
@@ -61,9 +61,6 @@ impl KnownInvisibleDocument {
     }
 
     pub fn into_problem(self) -> Result<(KnownInvisibleProblem, usize)> {
-        if self.rule == MateRule::BestMate {
-            bail!("最善詰は現在、覆面駒でのみ利用できます");
-        }
         let mut base = PositionAux::from_sfen(&self.base_sfen)
             .with_context(|| format!("SFENを解釈できません: {}", self.base_sfen))?;
         base.set_turn(self.rule.initial_turn(self.plies));
@@ -497,6 +494,10 @@ impl KnownInvisibleState {
         self.worlds[0].position.turn()
     }
 
+    pub fn rule(&self) -> MateRule {
+        self.rule
+    }
+
     fn successors(&self) -> Result<BTreeMap<KnownInvisibleObservedMove, Vec<InvisibleWorld>>> {
         let mut grouped =
             BTreeMap::<KnownInvisibleObservedMove, BTreeMap<String, InvisibleWorld>>::new();
@@ -542,6 +543,29 @@ impl KnownInvisibleState {
             }
         })
     }
+
+    fn attacker_hand_is_empty(&self) -> bool {
+        self.worlds
+            .iter()
+            .all(|world| world.position.hands().is_empty(Color::BLACK))
+    }
+
+    fn search_key(&self) -> String {
+        format!(
+            "{}|{}|{}",
+            usize::from(self.free_white_move),
+            match self.rule {
+                MateRule::Helpmate => 0,
+                MateRule::HelpSelfmate => 1,
+                MateRule::BestMate => 2,
+            },
+            self.worlds
+                .iter()
+                .map(InvisibleWorld::key)
+                .collect::<Vec<_>>()
+                .join(";")
+        )
+    }
 }
 
 fn concrete_movements(world: &InvisibleWorld, free_white_move: bool) -> Vec<Movement> {
@@ -573,6 +597,212 @@ pub enum KnownInvisibleObservedMove {
 }
 
 pub type KnownInvisibleSolution = Vec<KnownInvisibleObservedMove>;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KnownInvisibleBestMateResult {
+    pub mate_in: usize,
+    pub variations: Vec<KnownInvisibleSolution>,
+    pub variations_truncated: bool,
+}
+
+type BestMateDistanceMemo = HashMap<(String, usize), Option<usize>>;
+type BestMateNoSurplusMemo = HashMap<(String, usize, usize), bool>;
+
+pub fn solve_known_invisible_best_mate(
+    initial: &KnownInvisibleState,
+    plies: usize,
+    max_variations: usize,
+) -> Result<Option<KnownInvisibleBestMateResult>> {
+    solve_known_invisible_best_mate_with_options(
+        initial,
+        plies,
+        max_variations,
+        BestMateOptions::default(),
+    )
+}
+
+pub fn solve_known_invisible_best_mate_with_options(
+    initial: &KnownInvisibleState,
+    plies: usize,
+    max_variations: usize,
+    options: BestMateOptions,
+) -> Result<Option<KnownInvisibleBestMateResult>> {
+    if initial.rule() != MateRule::BestMate {
+        bail!("最善詰以外の状態が透明駒最善詰ソルバーへ渡されました");
+    }
+
+    let mut memo = BestMateDistanceMemo::new();
+    let Some(mate_in) = known_invisible_best_mate_distance(initial, plies, &mut memo)? else {
+        return Ok(None);
+    };
+    let mut variations = Vec::new();
+    let mut no_surplus_memo = BestMateNoSurplusMemo::new();
+    let variations_truncated = collect_known_invisible_best_mate_variations(
+        initial,
+        plies,
+        mate_in,
+        max_variations,
+        &mut Vec::with_capacity(mate_in),
+        &mut variations,
+        &mut memo,
+        &mut no_surplus_memo,
+        options,
+    )?;
+    Ok(Some(KnownInvisibleBestMateResult {
+        mate_in,
+        variations,
+        variations_truncated,
+    }))
+}
+
+fn known_invisible_best_mate_distance(
+    state: &KnownInvisibleState,
+    remaining: usize,
+    memo: &mut BestMateDistanceMemo,
+) -> Result<Option<usize>> {
+    if state.is_proven_mate() {
+        return Ok(Some(0));
+    }
+    if remaining == 0 {
+        return Ok(None);
+    }
+    let key = (state.search_key(), remaining);
+    if let Some(&cached) = memo.get(&key) {
+        return Ok(cached);
+    }
+
+    let mut distances = Vec::new();
+    for (_, worlds) in state.successors()? {
+        let next = KnownInvisibleState::from_worlds(worlds, false, state.rule);
+        distances.push(known_invisible_best_mate_distance(
+            &next,
+            remaining - 1,
+            memo,
+        )?);
+    }
+    let result = if distances.is_empty() {
+        None
+    } else if state.turn() == Color::BLACK {
+        distances
+            .into_iter()
+            .flatten()
+            .min()
+            .map(|distance| distance + 1)
+    } else {
+        distances
+            .into_iter()
+            .collect::<Option<Vec<_>>>()
+            .and_then(|values| values.into_iter().max())
+            .map(|distance| distance + 1)
+    };
+    memo.insert(key, result);
+    Ok(result)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn collect_known_invisible_best_mate_variations(
+    state: &KnownInvisibleState,
+    remaining: usize,
+    distance: usize,
+    max_variations: usize,
+    path: &mut KnownInvisibleSolution,
+    variations: &mut Vec<KnownInvisibleSolution>,
+    memo: &mut BestMateDistanceMemo,
+    no_surplus_memo: &mut BestMateNoSurplusMemo,
+    options: BestMateOptions,
+) -> Result<bool> {
+    if distance == 0 {
+        if variations.len() < max_variations {
+            variations.push(path.clone());
+            return Ok(false);
+        }
+        return Ok(true);
+    }
+
+    for (observed, worlds) in state.successors()? {
+        let next = KnownInvisibleState::from_worlds(worlds, false, state.rule);
+        let Some(child_distance) = known_invisible_best_mate_distance(&next, remaining - 1, memo)?
+        else {
+            continue;
+        };
+        if child_distance + 1 != distance {
+            continue;
+        }
+        if options.hide_redundant_defenses
+            && state.turn() == Color::WHITE
+            && !all_known_invisible_optimal_variations_have_no_surplus(
+                &next,
+                remaining - 1,
+                child_distance,
+                memo,
+                no_surplus_memo,
+            )?
+        {
+            continue;
+        }
+        path.push(observed);
+        let truncated = collect_known_invisible_best_mate_variations(
+            &next,
+            remaining - 1,
+            child_distance,
+            max_variations,
+            path,
+            variations,
+            memo,
+            no_surplus_memo,
+            options,
+        )?;
+        path.pop();
+        if truncated {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn all_known_invisible_optimal_variations_have_no_surplus(
+    state: &KnownInvisibleState,
+    remaining: usize,
+    distance: usize,
+    distance_memo: &mut BestMateDistanceMemo,
+    memo: &mut BestMateNoSurplusMemo,
+) -> Result<bool> {
+    if distance == 0 {
+        return Ok(state.is_proven_mate() && state.attacker_hand_is_empty());
+    }
+    let key = (state.search_key(), remaining, distance);
+    if let Some(&cached) = memo.get(&key) {
+        return Ok(cached);
+    }
+
+    let mut has_optimal_child = false;
+    let mut result = true;
+    for (_, worlds) in state.successors()? {
+        let next = KnownInvisibleState::from_worlds(worlds, false, state.rule);
+        let Some(child_distance) =
+            known_invisible_best_mate_distance(&next, remaining - 1, distance_memo)?
+        else {
+            continue;
+        };
+        if child_distance + 1 != distance {
+            continue;
+        }
+        has_optimal_child = true;
+        if !all_known_invisible_optimal_variations_have_no_surplus(
+            &next,
+            remaining - 1,
+            child_distance,
+            distance_memo,
+            memo,
+        )? {
+            result = false;
+            break;
+        }
+    }
+    result &= has_optimal_child;
+    memo.insert(key, result);
+    Ok(result)
+}
 
 pub fn solve_known_invisible_exact(
     initial: &KnownInvisibleState,
@@ -918,5 +1148,75 @@ mod tests {
             .worlds
             .iter()
             .all(|world| !world.invisibles.contains(&fixed)));
+    }
+
+    #[test]
+    fn solves_best_mate_with_an_unresolved_invisible_piece() {
+        let base = PositionAux::from_sfen("9/9/kS7/N8/1L7/9/9/9/9 b R 1").unwrap();
+        let make_world = |square| {
+            let mut position = base.clone();
+            position.set(square, Color::BLACK, Kind::Gold);
+            InvisibleWorld::new(
+                position,
+                vec![InvisiblePiece {
+                    color: Color::BLACK,
+                    kind: Kind::Gold,
+                    location: InvisibleLocation::Board(square),
+                }],
+            )
+        };
+        let state = KnownInvisibleState::from_worlds(
+            vec![make_world(Square::S99), make_world(Square::S89)],
+            false,
+            MateRule::BestMate,
+        );
+
+        let result = solve_known_invisible_best_mate(&state, 1, 10)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(result.mate_in, 1);
+        assert!(!result.variations.is_empty());
+        assert!(result.variations.iter().all(|line| line.len() == 1));
+    }
+
+    #[test]
+    fn best_mate_proof_is_not_skipped_when_variation_limit_is_zero() {
+        let (problem, plies) = KnownInvisibleDocument::from_json(
+            r#"{
+            "baseSfen":"9/9/kS7/N8/1L7/9/9/9/9 b R 1", "plies":1,
+            "rule":"bestMate", "invisibles":[]
+        }"#,
+        )
+        .unwrap()
+        .into_problem()
+        .unwrap();
+        let state = problem.enumerate().unwrap();
+
+        let result = solve_known_invisible_best_mate(&state, plies, 0)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(result.mate_in, 1);
+        assert!(result.variations.is_empty());
+        assert!(result.variations_truncated);
+    }
+
+    #[test]
+    fn best_mate_rejects_a_cooperative_line_with_an_escape() {
+        let (problem, plies) = KnownInvisibleDocument::from_json(
+            r#"{
+            "baseSfen":"3+pks3/9/4+P4/9/9/8B/9/9/9 b S2rb4g2s4n4l16p 1",
+            "plies":3, "rule":"bestMate", "invisibles":[]
+        }"#,
+        )
+        .unwrap()
+        .into_problem()
+        .unwrap();
+        let state = problem.enumerate().unwrap();
+
+        assert!(solve_known_invisible_best_mate(&state, plies, 10)
+            .unwrap()
+            .is_none());
     }
 }

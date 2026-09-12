@@ -27,7 +27,7 @@ Web版の「JSON詳細編集」と`hiddenmate_cli`は同じ問題形式を使用
 - `rule`（省略可）: 検討ルール。省略時は`helpmate`。
   - `helpmate`: 協力詰。攻方が受方玉を詰める。
   - `helpSelfmate`: 協力自玉詰。受方が攻方玉を詰める。
-  - `bestMate`: 最善詰。攻方は強制詰の手数を最小化し、受方は不詰を優先し、詰む場合は手数を最大化する。覆面駒問題でのみ指定できる。
+  - `bestMate`: 最善詰。攻方は強制詰の手数を最小化し、受方は不詰を優先し、詰む場合は手数を最大化する。
 - `handVariableMode`（省略可）: 同じ駒台にある複数の覆面駒の識別方法。省略時は`indistinguishable`。
   - `distinguishable`: V1、V2のように個体を指定して打つ。
   - `indistinguishable`: 個体を指定せずに打ち、どの個体だったかは後続の観測から推論する。
@@ -100,7 +100,7 @@ P L N S G B R K +P +L +N +S +B +R
 }
 ```
 
-- `baseSfen`、`plies`と手番の決定方法は覆面駒問題と同じ。`rule`は`helpmate`または`helpSelfmate`に対応し、`bestMate`は現在指定できない。
+- `baseSfen`、`plies`、`rule`と手番の決定方法は覆面駒問題と同じ。`rule`には`helpmate`、`helpSelfmate`、`bestMate`を指定できる。
 - `invisibles`は所属、駒種、枚数の配列。合計2枚まで。
 - `color`は`black`（攻方）または`white`（受方）。
 - `kind`は覆面駒と同じ14種類の駒種コード。
@@ -110,3 +110,5 @@ P L N S G B R K +P +L +N +S +B +R
 - 生駒は盤上または所属側の駒台、成駒と玉は盤上だけを初期位置候補にする。
 
 着手表記は、可視駒を取らない透明駒着手が`X`、可視駒を取る透明駒着手が`76X`のような形式となる。
+
+駒種指定透明駒を使用する最善詰の例は[`examples/known-invisible-best-mate.json`](../examples/known-invisible-best-mate.json)に収録している。

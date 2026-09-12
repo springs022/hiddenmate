@@ -13,7 +13,11 @@ export class KnownInvisibleSolverClient {
   };
   private nextRequestId = 1;
 
-  solve(problemJson: string, maxSolutions: number): Promise<string | undefined> {
+  solve(
+    problemJson: string,
+    maxSolutions: number,
+    hideRedundantDefenses: boolean,
+  ): Promise<string | undefined> {
     if (this.pending) throw new Error("検討は既に実行中です。");
     const worker = this.ensureWorker();
     const request: KnownInvisibleSolveRequest = {
@@ -21,6 +25,7 @@ export class KnownInvisibleSolverClient {
       requestId: this.nextRequestId++,
       problemJson,
       maxSolutions,
+      hideRedundantDefenses,
     };
     return new Promise((resolve, reject) => {
       this.pending = { request, resolve, reject };

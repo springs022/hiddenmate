@@ -19,9 +19,10 @@ pub use best_mate::{
 };
 pub use format::ProblemDocument;
 pub use known_invisible::{
-    format_known_invisible_solution_japanese, solve_known_invisible_exact, KnownInvisibleDocument,
-    KnownInvisibleObservedMove, KnownInvisibleProblem, KnownInvisibleSolution, KnownInvisibleSpec,
-    KnownInvisibleState,
+    format_known_invisible_solution_japanese, solve_known_invisible_best_mate,
+    solve_known_invisible_best_mate_with_options, solve_known_invisible_exact,
+    KnownInvisibleBestMateResult, KnownInvisibleDocument, KnownInvisibleObservedMove,
+    KnownInvisibleProblem, KnownInvisibleSolution, KnownInvisibleSpec, KnownInvisibleState,
 };
 pub use observed::{DropIdentity, MoveIdentity, ObservedMove};
 pub use problem::{VariableProblem, VariableSpec};

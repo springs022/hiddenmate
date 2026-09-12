@@ -1,0 +1,8 @@
+{
+  "baseSfen": "9/9/kS7/N8/1L7/9/9/9/9 b R 1",
+  "plies": 1,
+  "rule": "bestMate",
+  "invisibles": [
+    { "color": "black", "kind": "G", "count": 1 }
+  ]
+}

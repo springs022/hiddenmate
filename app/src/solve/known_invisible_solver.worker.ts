@@ -17,6 +17,7 @@ worker.onmessage = (event: MessageEvent<KnownInvisibleSolveRequest>) => {
       responseJson: solve_known_invisible_problem(
         request.problemJson,
         request.maxSolutions,
+        request.hideRedundantDefenses,
       ),
     };
   } catch (reason) {

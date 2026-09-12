@@ -4,7 +4,8 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use hiddenmate_core::{
     format_known_invisible_solution_japanese, format_solution_japanese, solve_best_mate,
-    solve_exact, solve_known_invisible_exact, KnownInvisibleDocument, MateRule, ProblemDocument,
+    solve_exact, solve_known_invisible_best_mate, solve_known_invisible_exact,
+    KnownInvisibleDocument, MateRule, ProblemDocument,
 };
 
 #[derive(Debug, Parser)]
@@ -72,6 +73,22 @@ fn solve_known_invisible(json: &str, max_solutions: usize) -> Result<()> {
     let (problem, plies) = document.into_problem()?;
     let state = problem.enumerate()?;
     println!("初形候補世界: {}", state.world_count());
+    if state.rule() == MateRule::BestMate {
+        let Some(result) = solve_known_invisible_best_mate(&state, plies, max_solutions)? else {
+            println!("解なし");
+            return Ok(());
+        };
+        println!("最善詰: {}手", result.mate_in);
+        println!("変化数: {}", result.variations.len());
+        for (index, variation) in result.variations.iter().enumerate() {
+            let moves = format_known_invisible_solution_japanese(&state, variation)?.join(" ");
+            println!("{}: {}", index + 1, moves);
+        }
+        if result.variations_truncated {
+            println!("（変化表示は最大解数で省略）");
+        }
+        return Ok(());
+    }
     let solutions = solve_known_invisible_exact(&state, plies, max_solutions)?;
     println!("解数: {}", solutions.len());
     for (index, solution) in solutions.iter().enumerate() {

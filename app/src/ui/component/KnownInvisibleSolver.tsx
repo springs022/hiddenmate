@@ -29,6 +29,8 @@ interface ProblemDocument {
 interface SolveResponse {
   worldCount: number;
   solutions: string[][];
+  bestMateIn?: number;
+  variationsTruncated: boolean;
 }
 
 function formatInvisibleSummary(problem: ProblemDocument): string {
@@ -81,6 +83,7 @@ export function KnownInvisibleSolver() {
   const [plies, setPlies] = useState(3);
   const [rule, setRule] = useState<MateRule>("helpmate");
   const [maxSolutions, setMaxSolutions] = useState(20);
+  const [hideRedundantDefenses, setHideRedundantDefenses] = useState(false);
   const [manualProblem, setManualProblem] = useState(buildProblemJson(initialSfen, 3, "helpmate", emptyCounts()));
   const [solving, setSolving] = useState(false);
   const [response, setResponse] = useState<SolveResponse>();
@@ -100,7 +103,19 @@ export function KnownInvisibleSolver() {
       .map(([kind, label]) => ({ color, kind, label, count: counts[color][kind] })),
   );
   const problemJson = buildProblemJson(encodeSfen(editorState.position), plies, rule, counts);
+  const manualRule = (() => {
+    try {
+      const problem = JSON.parse(manualProblem) as Partial<ProblemDocument>;
+      return problem.rule ?? "helpmate";
+    } catch {
+      return undefined;
+    }
+  })();
   const clear = () => { setError(undefined); setResponse(undefined); setSolvedProblem(undefined); };
+  const changeHideRedundantDefenses = (hide: boolean) => {
+    setHideRedundantDefenses(hide);
+    clear();
+  };
 
   const changeCount = (color: Color, kind: InvisibleKind, delta: number) => {
     if (delta > 0 && total >= 2) return;
@@ -134,7 +149,7 @@ export function KnownInvisibleSolver() {
         throw new Error("問題JSONにbaseSfenとinvisiblesが必要です");
       if (!Number.isInteger(problem.plies) || problem.plies < 1)
         throw new Error("pliesは1以上の整数で指定してください");
-      if (problem.rule && problem.rule !== "helpmate" && problem.rule !== "helpSelfmate")
+      if (problem.rule && problem.rule !== "helpmate" && problem.rule !== "helpSelfmate" && problem.rule !== "bestMate")
         throw new Error("未知のルールです");
       const nextCounts = emptyCounts();
       let nextTotal = 0;
@@ -162,7 +177,11 @@ export function KnownInvisibleSolver() {
     try {
       client.current ??= new KnownInvisibleSolverClient();
       const requestedProblem = inputMode === "form" ? problemJson : manualProblem;
-      const json = await client.current.solve(requestedProblem, maxSolutions);
+      const json = await client.current.solve(
+        requestedProblem,
+        maxSolutions,
+        hideRedundantDefenses,
+      );
       if (json) {
         setResponse(JSON.parse(json) as SolveResponse);
         setSolvedProblem(JSON.parse(requestedProblem) as ProblemDocument);
@@ -178,20 +197,28 @@ export function KnownInvisibleSolver() {
     setPlies={inputMode === "form" ? (value) => { setPlies(value); clear(); } : undefined}
     rule={inputMode === "form" ? rule : undefined}
     setRule={inputMode === "form" ? (value) => { setRule(value); clear(); } : undefined}
-    ruleOptions={["helpmate", "helpSelfmate"]}
+    ruleOptions={["helpmate", "helpSelfmate", "bestMate"]}
     maxSolutions={maxSolutions}
     setMaxSolutions={setMaxSolutions}
+    bestMateOptions={inputMode === "json" && manualRule === "bestMate"}
+    hideRedundantDefenses={hideRedundantDefenses}
+    setHideRedundantDefenses={changeHideRedundantDefenses}
     solving={solving}
     onSolve={solve}
   />;
   const results = <>
     {error && <Alert variant="danger">{error}</Alert>}
     {response && solvedProblem && <>
-      <p className="mb-0">{solvedProblem.rule === "helpSelfmate" ? "協力自玉詰" : "協力詰"} {solvedProblem.plies}手</p>
+      <p className="mb-0">{solvedProblem.rule === "bestMate"
+        ? response.bestMateIn === undefined
+          ? `最善詰（上限${solvedProblem.plies}手）`
+          : `最善詰 ${response.bestMateIn}手（上限${solvedProblem.plies}手）`
+        : `${solvedProblem.rule === "helpSelfmate" ? "協力自玉詰" : "協力詰"} ${solvedProblem.plies}手`}</p>
       <p>{formatInvisibleSummary(solvedProblem)}</p>
       <p>初形候補世界: <strong>{response.worldCount}</strong> ／ 解数: <strong>{response.solutions.length}</strong></p>
-      {response.solutions.length === 0 ? <Alert variant="info">指定手数以下の解はありません。</Alert> :
-        <ol className="known-invisible-solutions">{response.solutions.map((solution, index) => <li key={index}><code>{solution.join(" ")} まで {solution.length}手</code></li>)}</ol>}</>}
+      {response.solutions.length === 0 ? <Alert variant="info">{solvedProblem.rule === "bestMate" ? "指定手数以内の強制詰はありません。" : "指定手数以下の解はありません。"}</Alert> :
+        <ol className="known-invisible-solutions">{response.solutions.map((solution, index) => <li key={index}><code>{solution.join(" ")} まで {solution.length}手</code></li>)}</ol>}
+      {response.variationsTruncated && <Alert variant="warning">変化表示は最大解数で省略されています。</Alert>}</>}
   </>;
 
   return <Card className="mb-4 known-invisible-solver">

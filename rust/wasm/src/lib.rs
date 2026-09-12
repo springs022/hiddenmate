@@ -7,8 +7,9 @@ use std::collections::BTreeMap;
 use fmrs_core::piece::Kind;
 use hiddenmate_core::{
     format_known_invisible_solution_japanese, format_solution_japanese,
-    solve_best_mate_with_options, solve_exact, solve_known_invisible_exact, BestMateOptions,
-    HiddenState, KnownInvisibleDocument, MateRule, ObservedMove, ProblemDocument, Solution,
+    solve_best_mate_with_options, solve_exact, solve_known_invisible_best_mate_with_options,
+    solve_known_invisible_exact, BestMateOptions, HiddenState, KnownInvisibleDocument, MateRule,
+    ObservedMove, ProblemDocument, Solution,
 };
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
@@ -212,26 +213,72 @@ fn kind_code(kind: Kind) -> &'static str {
 struct KnownInvisibleSolveResponse {
     world_count: usize,
     solutions: Vec<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    best_mate_in: Option<usize>,
+    variations_truncated: bool,
 }
 
 /// 駒種を指定した透明駒問題JSONを解き、Web UI向けのJSONを返す。
 #[wasm_bindgen]
-pub fn solve_known_invisible_problem(json: &str, max_solutions: u32) -> Result<String, JsValue> {
-    solve_known_invisible_problem_json(json, max_solutions as usize)
-        .map_err(|error| JsValue::from_str(&format!("{error:#}")))
+pub fn solve_known_invisible_problem(
+    json: &str,
+    max_solutions: u32,
+    hide_redundant_defenses: bool,
+) -> Result<String, JsValue> {
+    solve_known_invisible_problem_json_with_options(
+        json,
+        max_solutions as usize,
+        hide_redundant_defenses,
+    )
+    .map_err(|error| JsValue::from_str(&format!("{error:#}")))
 }
 
+#[cfg(test)]
 fn solve_known_invisible_problem_json(json: &str, max_solutions: usize) -> anyhow::Result<String> {
+    solve_known_invisible_problem_json_with_options(json, max_solutions, false)
+}
+
+fn solve_known_invisible_problem_json_with_options(
+    json: &str,
+    max_solutions: usize,
+    hide_redundant_defenses: bool,
+) -> anyhow::Result<String> {
     let document = KnownInvisibleDocument::from_json(json)?;
     let (problem, plies) = document.into_problem()?;
     let state = problem.enumerate()?;
-    let solutions = solve_known_invisible_exact(&state, plies, max_solutions)?
+    let (raw_solutions, best_mate_in, variations_truncated) = if state.rule() == MateRule::BestMate
+    {
+        match solve_known_invisible_best_mate_with_options(
+            &state,
+            plies,
+            max_solutions,
+            BestMateOptions {
+                hide_redundant_defenses,
+            },
+        )? {
+            Some(result) => (
+                result.variations,
+                Some(result.mate_in),
+                result.variations_truncated,
+            ),
+            None => (Vec::new(), None, false),
+        }
+    } else {
+        (
+            solve_known_invisible_exact(&state, plies, max_solutions)?,
+            None,
+            false,
+        )
+    };
+    let solutions = raw_solutions
         .iter()
         .map(|solution| format_known_invisible_solution_japanese(&state, solution))
         .collect::<anyhow::Result<Vec<_>>>()?;
     Ok(serde_json::to_string(&KnownInvisibleSolveResponse {
         world_count: state.world_count(),
         solutions,
+        best_mate_in,
+        variations_truncated,
     })?)
 }
 
@@ -403,5 +450,18 @@ mod hiddenmate_tests {
         let value: serde_json::Value = serde_json::from_str(&response).unwrap();
         assert!(value["worldCount"].as_u64().unwrap() > 1);
         assert_eq!(value["solutions"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn solves_known_invisible_best_mate_for_web() {
+        let json = r#"{
+            "baseSfen":"9/9/kS7/N8/1L7/9/9/9/9 b R 1",
+            "plies":1, "rule":"bestMate", "invisibles":[]
+        }"#;
+        let response = solve_known_invisible_problem_json(json, 10).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(value["bestMateIn"], 1);
+        assert!(!value["solutions"].as_array().unwrap().is_empty());
+        assert_eq!(value["variationsTruncated"], false);
     }
 }
