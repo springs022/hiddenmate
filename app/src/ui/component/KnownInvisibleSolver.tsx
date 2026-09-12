@@ -216,7 +216,7 @@ export function KnownInvisibleSolver() {
         : `${solvedProblem.rule === "helpSelfmate" ? "協力自玉詰" : "協力詰"} ${solvedProblem.plies}手`}</p>
       <p>{formatInvisibleSummary(solvedProblem)}</p>
       <p>初形候補世界: <strong>{response.worldCount}</strong> ／ 解数: <strong>{response.solutions.length}</strong></p>
-      {response.solutions.length === 0 ? <Alert variant="info">{solvedProblem.rule === "bestMate" ? "指定手数以内の強制詰はありません。" : "指定手数以下の解はありません。"}</Alert> :
+      {response.solutions.length === 0 ? <Alert variant="info">{solvedProblem.rule === "bestMate" ? "指定手数以内の解はありません。" : "指定手数以下の解はありません。"}</Alert> :
         <ol className="known-invisible-solutions">{response.solutions.map((solution, index) => <li key={index}><code>{solution.join(" ")} まで {solution.length}手</code></li>)}</ol>}
       {response.variationsTruncated && <Alert variant="warning">変化表示は最大解数で省略されています。</Alert>}</>}
   </>;

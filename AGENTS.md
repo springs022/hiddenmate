@@ -5,15 +5,15 @@
 ## 1. プロジェクト概要
 
 **プロジェクト名**: HiddenMate
-**目的**: 覆面駒を使用した協力詰・協力自玉詰を検討するソフトウェア。高速な協力詰エンジン[fmrs](https://github.com/ogiekako/fmrs)を基盤とする。
+**目的**: 覆面駒と駒種指定透明駒を使用した協力詰・協力自玉詰・最善詰を検討するソフトウェア。高速な協力詰エンジン[fmrs](https://github.com/ogiekako/fmrs)を基盤とする。
 
 現在の実装状況:
 
-- 覆面駒（Variable）を使用した協力詰・協力自玉詰・最善詰に対応する。
+- 覆面駒（Variable）と駒種指定透明駒（Invisible）を使用した協力詰・協力自玉詰・最善詰に対応する。
 - 覆面駒の候補世界、観測着手、候補絞り込み、全候補世界での詰み証明を実装している。
 - 公開Web版は静的なGitHub Pagesで配信し、探索をWeb Worker内のWebAssemblyで実行する。問題や局面を外部サーバーへ送信しない。
 - 同じ問題JSONと探索コアを使用するCLIを提供する。
-- 透明駒（Invisible）の検討機能は開発中で、現時点では利用できない。
+- 位置と駒種の両方が不明な通常の透明駒（Invisible）の検討機能は開発中で、現時点では利用できない。
 
 ## 2. 構成と責務
 
@@ -21,18 +21,19 @@
 
 - **`rust/hiddenmate_core/`**: HiddenMate固有の中心実装。
   - 問題JSONの読み込み
-  - 覆面駒の候補世界列挙
+  - 覆面駒・駒種指定透明駒の候補世界列挙
   - 観測着手と候補世界の更新
-  - 協力詰・協力自玉詰探索
+  - 協力詰・協力自玉詰・最善詰探索
   - 日本語手順表記
 - **`rust/hiddenmate_cli/`**: HiddenMate問題JSONを解くCLI。
-- **`rust/wasm/`**: Web版から呼び出すWasmバインディング。`solve_variable_problem`がHiddenMate探索の境界となる。
+- **`rust/wasm/`**: Web版から呼び出すWasmバインディング。`solve_variable_problem`と`solve_known_invisible_problem`がHiddenMate探索の境界となる。
 - **`rust/fmrs_core/`**: fmrs由来の局面表現、SFEN、合法手生成、王手・詰み判定など。HiddenMateの各具体世界はこの通常局面実装を利用する。
 - **`rust/src/`**: fmrs由来のCLI・探索・自動生成機能。HiddenMate固有の変更対象とは限らないため、依頼と関係がある場合だけ変更する。
 
 ### Web
 
 - **`app/src/ui/component/VariableSolver.tsx`**: 覆面駒問題の入力、局面編集、ルール選択、探索結果表示を担う主要UI。
+- **`app/src/ui/component/KnownInvisibleSolver.tsx`**: 駒種指定透明駒問題の入力、局面編集、ルール選択、探索結果表示を担う主要UI。
 - **`app/src/solve/variable_solver_client.ts`**: UIと探索用Web Workerの間を仲介し、実行・中断・エラー処理を管理する。
 - **`app/src/solve/variable_solver.worker.ts`**: Worker内でWasmの`solve_variable_problem`を実行する。
 - **`app/src/wasm_api.ts` / `app/src/wasm_api.d.ts`**: TypeScriptとWasmのインターフェース。
@@ -55,11 +56,11 @@
 - **対応ルール**:
   - `helpmate`: 協力詰。攻方が受方玉を詰める。
   - `helpSelfmate`: 協力自玉詰。受方が攻方玉を詰める。
-  - `bestMate`: 最善詰。攻方は強制詰の手数を最小化し、受方は不詰を優先し、詰む場合は手数を最大化する。現在は覆面駒のみ対応する。
+  - `bestMate`: 最善詰。攻方は詰みまでの手数を最小化し、受方は不詰を優先し、詰む場合は手数を最大化する。覆面駒と駒種指定透明駒に対応する。
 - **持駒の覆面駒**:
   - `indistinguishable`: 同じ駒台の覆面駒を区別せず、どの個体だったかを後続の観測から推論する。既定値。
   - `distinguishable`: V1、V2のように個体を指定して着手する。
-- **探索手数**: 協力系は指定手数以下について、ルール上詰みになり得る手数だけを短い順に列挙する。最善詰は指定手数以内の強制詰をAND/OR探索し、攻方最短・受方最長の手数を返す。
+- **探索手数**: 協力系は指定手数以下について、ルール上詰みになり得る手数だけを短い順に列挙する。最善詰は指定手数以内の解をAND/OR探索し、攻方最短・受方最長の手数を返す。
 - **制限**: 覆面駒は最大6枚。詳細は`design/problem-format.md`を正とする。
 
 ## 4. 作業開始時の必須確認

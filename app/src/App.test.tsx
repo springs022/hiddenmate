@@ -310,6 +310,36 @@ test("solves known invisible best mate and shows its distance", async () => {
   expect(panel.getByText("X まで 1手")).not.toBeNull();
 });
 
+test("uses solution terminology when known invisible best mate has no answer", async () => {
+  const { container } = render(<App />);
+  fireEvent.click(
+    screen.getByRole("button", { name: "透明駒（駒種指定）の入力を開く" }),
+  );
+  const panel = within(
+    container.querySelector(".known-invisible-solver") as HTMLElement,
+  );
+  fireEvent.change(panel.getByLabelText("ルール"), {
+    target: { value: "bestMate" },
+  });
+  fireEvent.click(panel.getByRole("button", { name: "検討" }));
+  act(() => {
+    workerInstances[0].onmessage?.({ data: { type: "ready" } } as MessageEvent);
+    workerInstances[0].onmessage?.({
+      data: {
+        type: "solved",
+        requestId: 1,
+        responseJson: JSON.stringify({
+          worldCount: 12,
+          solutions: [],
+          variationsTruncated: false,
+        }),
+      },
+    } as MessageEvent);
+  });
+
+  expect(await panel.findByText("指定手数以内の解はありません。")).not.toBeNull();
+});
+
 test("places the editor, variable controls, and solve results in three columns", () => {
   const { container } = render(<App />);
   const panel = container.querySelector(".variable-control-panel");
